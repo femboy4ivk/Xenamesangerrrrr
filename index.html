@@ -132,6 +132,10 @@
                     <input type="text" id="reg-name" placeholder="Иван Иванов" style="width: 100%; padding: 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 14px; color: var(--text-main);">
                 </div>
                 <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Юзернейм (@username)</label>
+                    <input type="text" id="auth-username" required placeholder="ivanov" style="width: 100%; padding: 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 14px; color: var(--text-main);">
+                </div>
+                <div>
                     <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Электронная почта</label>
                     <input type="email" id="auth-email" required placeholder="name@example.com" style="width: 100%; padding: 12px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 14px; color: var(--text-main);">
                 </div>
@@ -151,10 +155,13 @@
             <!-- Шапка профиля и настройки -->
             <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; background: var(--bg-sidebar);">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <div id="user-avatar-initials" style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(147,51,234,0.3);">U</div>
+                    <div id="user-avatar-container" style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(147,51,234,0.3);">
+                        <span id="user-avatar-initials">U</span>
+                        <img id="user-avatar-img" src="" class="hidden" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
                     <div>
                         <h3 id="current-user-name" style="font-size: 14px; font-weight: 700; color: var(--text-purple);">Пользователь</h3>
-                        <span style="font-size: 11px; color: #10b981; display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; display: inline-block;"></span> в сети</span>
+                        <span id="current-user-tag" style="font-size: 11px; color: var(--text-secondary); opacity: 0.9;">@username</span>
                     </div>
                 </div>
                 <div style="display: flex; gap: 4px;">
@@ -168,15 +175,16 @@
                 <button onclick="switchTab('all')" id="tab-all" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: var(--accent); color: white;">Чаты</button>
                 <button onclick="switchTab('groups')" id="tab-groups" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: var(--bg-input); color: var(--text-secondary);">Группы</button>
                 <button onclick="switchTab('channels')" id="tab-channels" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: var(--bg-input); color: var(--text-secondary);">Каналы</button>
-                <button onclick="switchTab('requests')" id="tab-requests" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: var(--bg-input); color: var(--text-secondary); position: relative;">Заявки <span id="badge-requests" style="position: absolute; top: 2px; right: 2px; background: #ef4444; color: white; width: 6px; height: 6px; border-radius: 50%;"></span></button>
+                <button onclick="switchTab('requests')" id="tab-requests" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: var(--bg-input); color: var(--text-secondary); position: relative;">Заявки <span id="badge-requests" style="position: absolute; top: 2px; right: 2px; background: #ef4444; color: white; width: 6px; height: 6px; border-radius: 50%; display: none;"></span></button>
             </div>
 
-            <!-- Поиск -->
-            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); background: var(--bg-sidebar);">
-                <div style="position: relative;">
+            <!-- Поиск и Кнопка добавления в друзья -->
+            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); background: var(--bg-sidebar); display: flex; gap: 8px;">
+                <div style="position: relative; flex: 1;">
                     <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 12px; color: var(--text-secondary); font-size: 13px;"></i>
-                    <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Поиск или добавить в друзья..." style="width: 100%; padding: 10px 10px 10px 38px; background: var(--bg-input); border-radius: 10px; border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
+                    <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Поиск по чатам..." style="width: 100%; padding: 10px 10px 10px 38px; background: var(--bg-input); border-radius: 10px; border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
                 </div>
+                <button onclick="openAddFriendModal()" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--accent); padding: 0 12px; border-radius: 10px; font-size: 14px;" title="Добавить в друзья по @username"><i class="fa-solid fa-user-plus"></i></button>
             </div>
 
             <!-- Список комнат -->
@@ -204,9 +212,20 @@
                     </div>
                 </div>
                 
-                <div id="call-buttons-container" style="display: none; gap: 8px;">
-                    <button onclick="startCall('audio')" style="width: 38px; height: 38px; border-radius: 10px; background: var(--bg-input); color: var(--accent); display: flex; align-items: center; justify-content: center;" title="Аудиозвонок"><i class="fa-solid fa-phone" style="font-size: 13px;"></i></button>
-                    <button onclick="startCall('video')" style="width: 38px; height: 38px; border-radius: 10px; background: var(--bg-input); color: var(--accent); display: flex; align-items: center; justify-content: center;" title="Видеозвонок"><i class="fa-solid fa-video" style="font-size: 13px;"></i></button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="call-buttons-container" style="display: none; gap: 8px;">
+                        <button onclick="startCall('audio')" style="width: 38px; height: 38px; border-radius: 10px; background: var(--bg-input); color: var(--accent); display: flex; align-items: center; justify-content: center;" title="Аудиозвонок"><i class="fa-solid fa-phone" style="font-size: 13px;"></i></button>
+                        <button onclick="startCall('video')" style="width: 38px; height: 38px; border-radius: 10px; background: var(--bg-input); color: var(--accent); display: flex; align-items: center; justify-content: center;" title="Видеозвонок"><i class="fa-solid fa-video" style="font-size: 13px;"></i></button>
+                    </div>
+                    <!-- Управление чатом (Кик/Бан/Удалить) -->
+                    <div id="room-actions-container" class="hidden" style="position: relative;">
+                        <button onclick="toggleRoomMenu()" style="width: 38px; height: 38px; border-radius: 10px; background: var(--bg-input); color: var(--text-secondary); display: flex; align-items: center; justify-content: center;" title="Опции чата"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                        <div id="room-dropdown-menu" class="hidden" style="position: absolute; right: 0; top: 45px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); width: 160px; z-index: 50; overflow: hidden;">
+                            <button onclick="kickUser()" style="width: 100%; padding: 10px 12px; text-align: left; font-size: 12px; color: var(--text-main); display: flex; align-items: center; gap: 8px;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='transparent'"><i class="fa-solid fa-user-minus"></i> Кикнуть</button>
+                            <button onclick="banUser()" style="width: 100%; padding: 10px 12px; text-align: left; font-size: 12px; color: #ef4444; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='transparent'"><i class="fa-solid fa-ban"></i> Забанить</button>
+                            <button onclick="deleteActiveRoom()" style="width: 100%; padding: 10px 12px; text-align: left; font-size: 12px; color: #ef4444; border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='transparent'"><i class="fa-solid fa-trash"></i> Удалить чат</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -224,6 +243,21 @@
                 <button onclick="document.getElementById('file-input').click()" style="color: var(--text-secondary); padding: 8px;" title="Прикрепить файл"><i class="fa-solid fa-paperclip" style="font-size: 18px;"></i></button>
                 <input type="text" id="message-input" onkeydown="if(event.key==='Enter') sendMessage()" placeholder="Написать сообщение..." style="flex: 1; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text-main);">
                 <button onclick="sendMessage()" style="background: var(--accent); color: white; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(147,51,234,0.3);"><i class="fa-solid fa-paper-plane" style="font-size: 13px;"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА: ДОБАВИТЬ В ДРУЗЬЯ -->
+    <div id="add-friend-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="padding: 1.5rem;">
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text-purple); margin-bottom: 1rem;"><i class="fa-solid fa-user-plus"></i> Добавить друга</h3>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Юзернейм пользователя</label>
+                <input type="text" id="friend-username-input" placeholder="@username" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button onclick="closeAddFriendModal()" style="padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary);">Отмена</button>
+                <button onclick="sendFriendRequest()" class="btn-primary" style="width: auto; padding: 8px 20px; font-size: 12px;">Отправить заявку</button>
             </div>
         </div>
     </div>
@@ -247,7 +281,7 @@
         </div>
     </div>
 
-    <!-- МОДАЛКА: НАСТРОЙКИ (С ТЕМОЙ) -->
+    <!-- МОДАЛКА: НАСТРОЙКИ (ПРОФИЛЬ, АВАТАРКА, ТЕМА) -->
     <div id="settings-modal" class="modal-overlay hidden">
         <div class="modal-card" style="padding: 1.5rem; max-width: 450px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
@@ -256,18 +290,22 @@
             </div>
             <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="text-align: center; margin-bottom: 4px;">
-                    <div id="settings-avatar-preview" style="width: 70px; height: 70px; border-radius: 50%; background: var(--accent); color: white; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; box-shadow: 0 4px 10px rgba(147,51,234,0.3);">U</div>
-                    <span style="font-size: 11px; color: var(--text-secondary); opacity: 0.8;">Аккаунт Xena</span>
+                    <div id="settings-avatar-wrapper" style="width: 70px; height: 70px; border-radius: 50%; background: var(--accent); color: white; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(147,51,234,0.3);">
+                        <span id="settings-avatar-initials">U</span>
+                        <img id="settings-avatar-img" src="" class="hidden" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <label style="font-size: 12px; color: var(--accent); font-weight: 600; cursor: pointer;">
+                        Сменить аватарку <input type="file" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
+                    </label>
                 </div>
                 <div>
                     <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Отображаемое имя</label>
                     <input type="text" id="settings-name" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
                 </div>
                 <div>
-                    <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Статус / О себе</label>
-                    <input type="text" id="settings-status" value="В сети и готов к общению" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
+                    <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Юзернейм (@username)</label>
+                    <input type="text" id="settings-tag" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
                 </div>
-                <!-- ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ -->
                 <div>
                     <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Тема оформления</label>
                     <select id="settings-theme-select" onchange="changeTheme(this.value)" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
@@ -316,10 +354,7 @@
         }
 
         let rooms = [];
-        let friendRequests = [
-            { id: 1, name: 'Ана Соколова', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' },
-            { id: 2, name: 'Максим Техник', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }
-        ];
+        let friendRequests = []; // Изначально пусто без Аны и Максима
 
         let activeRoomId = null;
         let currentTab = 'all';
@@ -333,7 +368,6 @@
         let isCamOff = false;
 
         window.onload = () => {
-            // Восстановление темы
             const savedTheme = localStorage.getItem('xena_theme') || 'light';
             changeTheme(savedTheme);
 
@@ -364,12 +398,15 @@
         function handleAuth(e) {
             e.preventDefault();
             const email = document.getElementById('auth-email').value;
+            const usernameInput = document.getElementById('auth-username').value.trim();
             const nameInput = document.getElementById('reg-name').value;
             const isReg = !document.getElementById('name-field').classList.contains('hidden');
 
             currentUser = {
                 name: isReg && nameInput ? nameInput : email.split('@')[0],
-                email: email
+                tag: usernameInput.startsWith('@') ? usernameInput : '@' + usernameInput,
+                email: email,
+                avatar: ''
             };
             localStorage.setItem('xena_user', JSON.stringify(currentUser));
             initApp();
@@ -378,8 +415,25 @@
         function initApp() {
             document.getElementById('auth-screen').classList.add('hidden');
             document.getElementById('current-user-name').innerText = currentUser.name;
-            document.getElementById('user-avatar-initials').innerText = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('current-user-tag').innerText = currentUser.tag;
+            
+            updateUserAvatars();
             renderSidebarContent();
+        }
+
+        function updateUserAvatars() {
+            const initContainer = document.getElementById('user-avatar-initials');
+            const imgContainer = document.getElementById('user-avatar-img');
+            
+            if (currentUser.avatar) {
+                initContainer.classList.add('hidden');
+                imgContainer.src = currentUser.avatar;
+                imgContainer.classList.remove('hidden');
+            } else {
+                initContainer.innerText = currentUser.name.charAt(0).toUpperCase();
+                initContainer.classList.remove('hidden');
+                imgContainer.classList.add('hidden');
+            }
         }
 
         function logout() {
@@ -412,23 +466,27 @@
             list.innerHTML = '';
 
             if (currentTab === 'requests') {
+                const badge = document.getElementById('badge-requests');
                 if (friendRequests.length === 0) {
+                    badge.style.display = 'none';
                     list.innerHTML = `<div style="padding: 2rem; text-align: center; font-size: 12px; color: var(--text-secondary); opacity: 0.6;">Нет новых заявок</div>`;
-                    document.getElementById('badge-requests').style.display = 'none';
                     return;
                 }
-                document.getElementById('badge-requests').style.display = 'block';
+                badge.style.display = 'block';
                 friendRequests.forEach(req => {
                     const div = document.createElement('div');
                     div.style.cssText = `padding: 10px 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color);`;
                     div.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <img src="${req.avatar}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
-                            <span style="font-size: 13px; font-weight: 600; color: var(--text-purple);">${req.name}</span>
+                            <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">${req.name.charAt(0)}</div>
+                            <div>
+                                <span style="font-size: 13px; font-weight: 600; color: var(--text-purple); display: block;">${req.name}</span>
+                                <span style="font-size: 10px; color: var(--text-secondary);">${req.tag}</span>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            <button onclick="acceptRequest(${req.id})" style="background: #10b981; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-check"></i></button>
-                            <button onclick="rejectRequest(${req.id})" style="background: #ef4444; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-xmark"></i></button>
+                            <button onclick="acceptRequest('${req.tag}')" style="background: #10b981; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-check"></i></button>
+                            <button onclick="rejectRequest('${req.tag}')" style="background: #ef4444; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                     `;
                     list.appendChild(div);
@@ -446,7 +504,7 @@
                 list.innerHTML = `
                     <div style="padding: 3rem 1rem; text-align: center; color: var(--text-secondary); opacity: 0.6;">
                         <p style="font-size: 13px; margin-bottom: 8px;">Список пуст</p>
-                        <p style="font-size: 11px;">Нажмите на значок карандаша внизу, чтобы создать группу или канал.</p>
+                        <p style="font-size: 11px;">Используйте кнопку плюсика сверху или карандаш снизу для добавления контактов и создания чатов.</p>
                     </div>
                 `;
                 return;
@@ -477,24 +535,44 @@
             });
         }
 
-        function acceptRequest(id) {
-            const req = friendRequests.find(r => r.id === id);
-            friendRequests = friendRequests.filter(r => r.id !== id);
+        // Логика добавления в друзья
+        function openAddFriendModal() { document.getElementById('add-friend-modal').classList.remove('hidden'); }
+        function closeAddFriendModal() { document.getElementById('add-friend-modal').classList.add('hidden'); document.getElementById('friend-username-input').value = ''; }
+        
+        function sendFriendRequest() {
+            let tag = document.getElementById('friend-username-input').value.trim();
+            if(!tag) return;
+            if(!tag.startsWith('@')) tag = '@' + tag;
+
+            if(tag === currentUser.tag) {
+                alert('Нельзя добавить самого себя');
+                return;
+            }
+
+            friendRequests.push({ name: tag.replace('@', ''), tag: tag });
+            closeAddFriendModal();
+            switchTab('requests');
+        }
+
+        function acceptRequest(tag) {
+            const req = friendRequests.find(r => r.tag === tag);
+            friendRequests = friendRequests.filter(r => r.tag !== tag);
             const newRoom = {
                 id: Date.now(),
                 type: 'group',
                 name: req.name,
-                avatar: req.avatar,
+                tag: req.tag,
+                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
                 info: 'в сети',
-                messages: [{ sender: req.name, text: 'Привет! Мы теперь в контактах Xena.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
+                messages: [{ sender: req.name, text: 'Привет! Мы добавили друг друга в контакты Xena.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
             };
             rooms.push(newRoom);
             renderSidebarContent();
             selectRoom(newRoom.id);
         }
 
-        function rejectRequest(id) {
-            friendRequests = friendRequests.filter(r => r.id !== id);
+        function rejectRequest(tag) {
+            friendRequests = friendRequests.filter(r => r.tag !== tag);
             renderSidebarContent();
         }
 
@@ -528,21 +606,57 @@
             selectRoom(newRoom.id);
         }
 
+        // Настройки и смена аватарки
+        let tempAvatarData = '';
         function openSettingsModal() {
             document.getElementById('settings-name').value = currentUser.name;
-            document.getElementById('settings-avatar-preview').innerText = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('settings-tag').value = currentUser.tag;
+            tempAvatarData = currentUser.avatar;
+            updateSettingsAvatarPreview();
             document.getElementById('settings-modal').classList.remove('hidden');
         }
         function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
+
+        function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                tempAvatarData = e.target.result;
+                updateSettingsAvatarPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateSettingsAvatarPreview() {
+            const initContainer = document.getElementById('settings-avatar-initials');
+            const imgContainer = document.getElementById('settings-avatar-img');
+            const settingsName = document.getElementById('settings-name').value || currentUser.name;
+
+            if (tempAvatarData) {
+                initContainer.classList.add('hidden');
+                imgContainer.src = tempAvatarData;
+                imgContainer.classList.remove('hidden');
+            } else {
+                initContainer.innerText = settingsName.charAt(0).toUpperCase();
+                initContainer.classList.remove('hidden');
+                imgContainer.classList.add('hidden');
+            }
+        }
         
         function saveSettings() {
             const newName = document.getElementById('settings-name').value.trim();
-            if(newName) {
-                currentUser.name = newName;
-                localStorage.setItem('xena_user', JSON.stringify(currentUser));
-                document.getElementById('current-user-name').innerText = newName;
-                document.getElementById('user-avatar-initials').innerText = newName.charAt(0).toUpperCase();
-            }
+            let newTag = document.getElementById('settings-tag').value.trim();
+            if(newTag && !newTag.startsWith('@')) newTag = '@' + newTag;
+
+            if(newName) currentUser.name = newName;
+            if(newTag) currentUser.tag = newTag;
+            currentUser.avatar = tempAvatarData;
+
+            localStorage.setItem('xena_user', JSON.stringify(currentUser));
+            document.getElementById('current-user-name').innerText = currentUser.name;
+            document.getElementById('current-user-tag').innerText = currentUser.tag;
+            updateUserAvatars();
             closeSettingsModal();
         }
 
@@ -554,6 +668,7 @@
             document.getElementById('active-room-avatar').src = room.avatar;
             document.getElementById('active-room-info').innerText = room.info;
             document.getElementById('input-area-wrapper').style.display = 'flex';
+            document.getElementById('room-actions-container').classList.remove('hidden');
             
             const callBtns = document.getElementById('call-buttons-container');
             if(room.type === 'channel') {
@@ -571,6 +686,47 @@
         }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
+
+        function toggleRoomMenu() {
+            const menu = document.getElementById('room-dropdown-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Кик, Бан и Удаление чата
+        function kickUser() {
+            toggleRoomMenu();
+            if(!activeRoomId) return;
+            const room = rooms.find(r => r.id === activeRoomId);
+            alert(`Участник удален (кикнут) из чата ${room.name}`);
+        }
+
+        function banUser() {
+            toggleRoomMenu();
+            if(!activeRoomId) return;
+            const room = rooms.find(r => r.id === activeRoomId);
+            alert(`Пользователь забанен в чате ${room.name}`);
+            deleteActiveRoom();
+        }
+
+        function deleteActiveRoom() {
+            toggleRoomMenu();
+            if(!activeRoomId) return;
+            rooms = rooms.filter(r => r.id !== activeRoomId);
+            activeRoomId = null;
+            document.getElementById('active-room-name').innerText = 'Выберите или создайте чат';
+            document.getElementById('active-room-info').innerText = 'пусто';
+            document.getElementById('active-room-avatar').src = '';
+            document.getElementById('input-area-wrapper').style.display = 'none';
+            document.getElementById('call-buttons-container').style.display = 'none';
+            document.getElementById('room-actions-container').classList.add('hidden');
+            document.getElementById('messages-container').innerHTML = `
+                <div style="text-align: center; color: var(--text-secondary); opacity: 0.6;">
+                    <i class="fa-regular fa-comments" style="font-size: 48px; margin-bottom: 8px;"></i>
+                    <p style="font-size: 14px;">Чат был удален</p>
+                </div>
+            `;
+            renderSidebarContent();
+        }
 
         function renderMessages() {
             const container = document.getElementById('messages-container');
