@@ -58,6 +58,40 @@
                 try { return JSON.parse(localStorage.getItem('xena_groups')) || []; } catch(e){ return []; }
             },
             saveGroups(groups) { localStorage.setItem('xena_groups', JSON.stringify(groups)); },
+            getStickers() {
+                try { 
+                    const custom = JSON.parse(localStorage.getItem('xena_stickers')) || [];
+                    // Default built-in stickers
+                    const defaults = [
+                        { id: 'st_1', name: 'Огонь', url: 'https://placehold.co/120x120/22c55e/ffffff?text=🔥' },
+                        { id: 'st_2', name: 'Сердце', url: 'https://placehold.co/120x120/ef4444/ffffff?text=❤️' },
+                        { id: 'st_3', name: 'Смех', url: 'https://placehold.co/120x120/eab308/ffffff?text=😂' },
+                        { id: 'st_4', name: 'Палец вверх', url: 'https://placehold.co/120x120/3b82f6/ffffff?text=👍' },
+                        { id: 'st_5', name: 'Ракета', url: 'https://placehold.co/120x120/a855f7/ffffff?text=🚀' },
+                        { id: 'st_6', name: 'Единорог', url: 'https://placehold.co/120x120/ec4899/ffffff?text=🦄' }
+                    ];
+                    return [...defaults, ...custom];
+                } catch(e){ return []; }
+            },
+            saveSticker(sticker) {
+                try {
+                    const custom = JSON.parse(localStorage.getItem('xena_stickers')) || [];
+                    custom.push(sticker);
+                    localStorage.setItem('xena_stickers', JSON.stringify(custom));
+                } catch(e){}
+            },
+            getNextUserId() {
+                const users = this.getUsers();
+                if (users.length === 0) return '0000000001';
+                // Find max ID converted to integer
+                let maxId = 0;
+                users.forEach(u => {
+                    const num = parseInt(u.id, 10);
+                    if (!isNaN(num) && num > maxId) maxId = num;
+                });
+                const nextNum = maxId + 1;
+                return String(nextNum).padStart(10, '0');
+            },
             updateUser(updatedUser) {
                 let users = this.getUsers();
                 users = users.map(u => u.id === updatedUser.id ? updatedUser : u);
@@ -69,14 +103,13 @@
             }
         };
 
-        // Cross-tab synchronization
+        // Cross-tab synchronization via storage events and polling
         window.addEventListener('storage', (e) => {
-            if (['xena_users', 'xena_messages', 'xena_groups', 'xena_current_user'].includes(e.key)) {
+            if (['xena_users', 'xena_messages', 'xena_groups', 'xena_current_user', 'xena_stickers'].includes(e.key)) {
                 renderApp();
             }
         });
 
-        // Polling loop for active sync across different browser windows/tabs
         setInterval(() => {
             const currentUser = DB.getCurrentUser();
             if (currentUser) {
@@ -95,11 +128,12 @@
             }
         }, 1000);
 
-        let activeTab = 'chats'; // 'chats', 'search', 'requests', 'groups', 'profile'
-        let activeChatId = null; // can be userId or groupId
+        let activeTab = 'chats'; // 'chats', 'search', 'requests', 'groups', 'stickers', 'profile'
+        let activeChatId = null; 
         let authMode = 'login';
         let notificationMessage = null;
-        let activeCall = null; // { peerName, type: 'audio'|'video', status: 'calling'|'connected' }
+        let activeCall = null; 
+        let isStickersOpen = false; // toggle sticker picker in chat
 
         function showNotification(msg, type = 'success') {
             notificationMessage = { text: msg, type };
@@ -112,7 +146,6 @@
             }, 3500);
         }
 
-        // Check URL for friendship link auto-action on load: ?add=userId
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             const targetId = params.get('add');
@@ -126,11 +159,9 @@
             const app = document.getElementById('app');
             const currentUser = DB.getCurrentUser();
 
-            // Check if there is a pending friend link request and user is logged in
             if (currentUser && window._pendingFriendLinkId) {
                 const targetId = window._pendingFriendLinkId;
                 window._pendingFriendLinkId = null;
-                // Clear URL param without reload
                 window.history.replaceState({}, document.title, window.location.pathname);
                 if (targetId !== currentUser.id) {
                     autoSendFriendRequest(targetId);
@@ -142,7 +173,6 @@
                 return;
             }
 
-            // Apply dark mode class to html element
             if (currentUser.darkMode) {
                 document.documentElement.classList.add('dark');
             } else {
@@ -166,9 +196,14 @@
                                         <p class="text-xs text-slate-500 dark:text-slate-400 truncate">ID: ${currentUser.id}</p>
                                     </div>
                                 </div>
-                                <button onclick="handleLogout()" title="Выйти" class="hidden md:flex text-slate-400 hover:text-red-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-                                    <i class="fa-solid fa-right-from-bracket"></i>
-                                </button>
+                                <div class="flex items-center space-x-1">
+                                    <button onclick="openPencilMenu()" title="Создать / Добавить друга" class="text-slate-500 hover:text-brand-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <i class="fa-solid fa-pen-to-square text-lg"></i>
+                                    </button>
+                                    <button onclick="handleLogout()" title="Выйти" class="hidden md:flex text-slate-400 hover:text-red-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <i class="fa-solid fa-right-from-bracket"></i>
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- Tabs Navigation -->
@@ -180,6 +215,10 @@
                                 <button onclick="switchTab('groups')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'groups' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-users text-lg w-6 text-center"></i>
                                     <span class="hidden md:inline">Группы / Каналы</span>
+                                </button>
+                                <button onclick="switchTab('stickers')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'stickers' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-face-smile text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Стикеры</span>
                                 </button>
                                 <button onclick="switchTab('search')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'search' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-link text-lg w-6 text-center"></i>
@@ -194,7 +233,7 @@
                                 </button>
                                 <button onclick="switchTab('profile')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-user-gear text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Профиль и Ссылка</span>
+                                    <span class="hidden md:inline">Профиль и ID</span>
                                 </button>
                             </nav>
                         </div>
@@ -211,7 +250,60 @@
                         ${renderMainContent(currentUser)}
                     </main>
                 </div>
+
+                <!-- Pencil Action Modal (Group, Channel, Add friend by ID) -->
+                <div id="pencil-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-bold text-lg">Быстрое меню действий</h3>
+                            <button onclick="closePencilMenu()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <h4 class="font-semibold text-sm mb-1"><i class="fa-solid fa-user-plus text-brand-500 mr-2"></i>Добавить друга по ID</h4>
+                                <p class="text-xs text-slate-500 mb-2">Введите 10-значный ID пользователя, чтобы отправить ему заявку:</p>
+                                <div class="flex gap-2">
+                                    <input type="text" id="pencil-friend-id" placeholder="0000000002" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:border-brand-500">
+                                    <button onclick="submitFriendByIdFromPencil()" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition">Добавить</button>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2 pt-2">
+                                <button onclick="closePencilMenu(); openCreateGroupModal();" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-users-rectangle text-brand-500"></i>
+                                    <span>Создать группу</span>
+                                </button>
+                                <button onclick="closePencilMenu(); switchTab('stickers');" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-face-smile text-brand-500"></i>
+                                    <span>Создать стикер</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
+        }
+
+        function openPencilMenu() {
+            const modal = document.getElementById('pencil-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closePencilMenu() {
+            const modal = document.getElementById('pencil-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function submitFriendByIdFromPencil() {
+            const input = document.getElementById('pencil-friend-id');
+            const targetId = (input.value || '').trim();
+            if (!targetId) {
+                showNotification('Введите ID пользователя', 'error');
+                return;
+            }
+            closePencilMenu();
+            autoSendFriendRequest(targetId);
         }
 
         function renderAuthScreen() {
@@ -223,7 +315,7 @@
                                 <i class="fa-solid fa-bolt"></i>
                             </div>
                             <h1 class="text-2xl font-bold tracking-tight">Xena Messenger</h1>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Реальные мультипользовательские чаты с localStorage</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Реальные ID от 0000000001 и стикерпаки</p>
                         </div>
 
                         <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
@@ -243,8 +335,8 @@
                                 </div>
                             ` : ''}
                             <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email или Логин</label>
-                                <input type="text" id="auth-email" required placeholder="user@example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email или Ваш ID (например 0000000001)</label>
+                                <input type="text" id="auth-email" required placeholder="0000000001 или email@example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Пароль</label>
@@ -267,24 +359,19 @@
 
         function handleAuthSubmit(e) {
             e.preventDefault();
-            const email = document.getElementById('auth-email').value.trim();
+            const identifier = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value.trim();
             let users = DB.getUsers();
 
             if (authMode === 'register') {
                 const name = document.getElementById('auth-name').value.trim();
-                if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-                    showNotification('Этот email уже зарегистрирован!', 'error');
-                    return;
-                }
-
-                const newUserId = 'u_' + Math.random().toString(36).substr(2, 7);
+                const newUserId = DB.getNextUserId();
                 const newUser = {
                     id: newUserId,
                     name,
-                    email,
+                    email: identifier,
                     password,
-                    bio: 'Привет! Я пользуюсь Xena Messenger.',
+                    bio: 'Привет! Мой ID в Xena: ' + newUserId,
                     avatar: '',
                     darkMode: false,
                     friends: [],
@@ -295,16 +382,16 @@
                 users.push(newUser);
                 DB.saveUsers(users);
                 DB.setCurrentUser(newUser);
-                showNotification('Регистрация успешна!');
+                showNotification('Регистрация успешна! Ваш ID: ' + newUserId);
                 renderApp();
             } else {
-                const user = users.find(u => (u.email.toLowerCase() === email.toLowerCase() || u.id === email) && u.password === password);
+                const user = users.find(u => (u.email.toLowerCase() === identifier.toLowerCase() || u.id === identifier) && u.password === password);
                 if (user) {
                     DB.setCurrentUser(user);
                     showNotification('С возвращением, ' + user.name + '!');
                     renderApp();
                 } else {
-                    showNotification('Неверный логин или пароль', 'error');
+                    showNotification('Неверный логин, ID или пароль', 'error');
                 }
             }
         }
@@ -328,6 +415,8 @@
                 return renderRequestsTab(currentUser);
             } else if (activeTab === 'groups') {
                 return renderGroupsTab(currentUser);
+            } else if (activeTab === 'stickers') {
+                return renderStickersTab(currentUser);
             } else if (activeTab === 'profile') {
                 return renderProfileTab(currentUser);
             } else {
@@ -352,7 +441,7 @@
                                 <div class="p-8 text-center text-slate-400">
                                     <i class="fa-solid fa-comments text-4xl mb-3 opacity-50"></i>
                                     <p class="text-sm font-medium">Список чатов пуст</p>
-                                    <p class="text-xs mt-1">Добавьте друзей по ссылке, чтобы начать общение.</p>
+                                    <p class="text-xs mt-1">Используйте кнопку карандаша или добавьте друга по ID.</p>
                                 </div>
                             ` : ''}
 
@@ -371,7 +460,7 @@
                                                 ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
                                             </div>
                                             <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                ${lastMsg ? escapeHtml(lastMsg.senderName + ': ' + lastMsg.text) : 'Группа'}
+                                                ${lastMsg ? escapeHtml(lastMsg.senderName + ': ' + (lastMsg.type === 'sticker' ? '[Стикер]' : lastMsg.text)) : 'Группа'}
                                             </p>
                                         </div>
                                     </div>
@@ -396,7 +485,7 @@
                                                 ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
                                             </div>
                                             <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                ${lastMsg ? escapeHtml(lastMsg.text) : 'Нет сообщений'}
+                                                ${lastMsg ? escapeHtml(lastMsg.type === 'sticker' ? '[Стикер]' : lastMsg.text) : 'Нет сообщений'}
                                             </p>
                                         </div>
                                     </div>
@@ -412,12 +501,74 @@
                                     <i class="fa-solid fa-comments"></i>
                                 </div>
                                 <h3 class="font-semibold text-lg text-slate-700 dark:text-slate-300">Выберите диалог</h3>
-                                <p class="text-sm max-w-sm mt-1">Выберите друга или группу слева, чтобы начать переписку.</p>
+                                <p class="text-sm max-w-sm mt-1">Выберите друга или группу слева для отправки сообщений и стикеров.</p>
                             </div>
                         `}
                     </div>
                 </div>
             `;
+        }
+
+        function renderStickersTab(currentUser) {
+            const stickers = DB.getStickers();
+
+            return `
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <h2 class="font-bold text-xl">Создание и каталог стикеров</h2>
+                        <p class="text-xs text-slate-500 mt-1">Созданные стикеры станут доступны абсолютно всем пользователям мессенджера!</p>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                        <!-- Creator Form -->
+                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                            <h3 class="font-bold text-sm mb-4"><i class="fa-solid fa-wand-magic-sparkles text-brand-500 mr-2"></i>Добавить новый стикер для всех</h3>
+                            <form onsubmit="handleCreateSticker(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название стикера</label>
+                                    <input type="text" id="sticker-name" required placeholder="Кот в шляпе" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL картинки стикера (прямая ссылка)</label>
+                                    <input type="url" id="sticker-url" required placeholder="https://placehold.co/150x150/16a34a/ffffff?text=🐱" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                </div>
+                                <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow transition text-sm">
+                                    Опубликовать для всех
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Catalog Grid -->
+                        <div class="max-w-4xl mx-auto">
+                            <h3 class="font-bold text-sm mb-3 text-slate-500 uppercase tracking-wider">Доступные стикеры (${stickers.length})</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                ${stickers.map(st => `
+                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm">
+                                        <img src="${escapeHtml(st.url)}" class="w-20 h-20 object-cover rounded-xl mb-2 shadow" onerror="this.src='https://placehold.co/120x120/22c55e/ffffff?text=Sticker'">
+                                        <span class="text-xs font-medium truncate w-full text-center">${escapeHtml(st.name)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleCreateSticker(e) {
+            e.preventDefault();
+            const name = document.getElementById('sticker-name').value.trim();
+            const url = document.getElementById('sticker-url').value.trim();
+
+            const newSticker = {
+                id: 'st_' + Math.random().toString(36).substr(2, 7),
+                name,
+                url
+            };
+
+            DB.saveSticker(newSticker);
+            showNotification('Стикер успешно создан и доступен всем!');
+            renderApp();
         }
 
         function renderLinkSearchTab(currentUser) {
@@ -427,12 +578,12 @@
             return `
                 <div class="flex flex-col h-full overflow-hidden">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl mb-2">Добавить друга по ссылке</h2>
+                        <h2 class="font-bold text-xl mb-2">Добавить друга по ID или ссылке</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                            Вставьте ссылку на дружбу или введите ID пользователя, чтобы сразу отправить заявку без лишних кнопок.
+                            Введите 10-значный ID пользователя (например, <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">0000000001</code>) или ссылку для мгновенной отправки заявки.
                         </p>
                         <div class="flex gap-2">
-                            <input type="text" id="link-input" value="${escapeHtml(queryInput)}" oninput="handleLinkInput(event)" placeholder="Вставьте ссылку (например ...?add=u_12345) или ID пользователя" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
+                            <input type="text" id="link-input" value="${escapeHtml(queryInput)}" oninput="handleLinkInput(event)" placeholder="0000000002 или ссылка" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
                             <button onclick="submitFriendByLink()" class="px-6 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl shadow-md transition shrink-0">
                                 Отправить заявку
                             </button>
@@ -440,17 +591,20 @@
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-6">
-                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm text-center">
-                            <div class="w-16 h-16 bg-brand-100 dark:bg-brand-900/40 text-brand-600 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-4">
-                                <i class="fa-solid fa-link"></i>
+                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm text-center space-y-4">
+                            <div class="w-16 h-16 bg-brand-100 dark:bg-brand-900/40 text-brand-600 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-2">
+                                <i class="fa-solid fa-id-badge"></i>
                             </div>
-                            <h3 class="font-bold text-base mb-1">Ваша личная ссылка на дружбу</h3>
-                            <p class="text-xs text-slate-500 mb-4">Отправьте её другу, и при переходе он автоматически добавит вас в друзья!</p>
+                            <h3 class="font-bold text-base">Ваш уникальный ID в системе</h3>
+                            <div class="text-2xl font-mono font-bold text-brand-600 dark:text-brand-400 bg-slate-100 dark:bg-slate-800 py-3 rounded-xl select-all">
+                                ${currentUser.id}
+                            </div>
+                            <p class="text-xs text-slate-500">Сообщите этот ID другу, чтобы он добавил вас напрямую.</p>
                             
                             <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
                                 <input type="text" readonly value="${link}" class="w-full bg-transparent text-xs px-2 text-slate-600 dark:text-slate-300 focus:outline-none select-all">
                                 <button onclick="copyMyFriendLink('${link}')" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition shrink-0">
-                                    <i class="fa-solid fa-copy mr-1"></i> Копировать
+                                    <i class="fa-solid fa-copy mr-1"></i> Ссылка
                                 </button>
                             </div>
                         </div>
@@ -476,7 +630,7 @@
         function submitFriendByLink() {
             const query = (window._linkQuery || '').trim();
             if (!query) {
-                showNotification('Введите ссылку или ID', 'error');
+                showNotification('Введите ID или ссылку', 'error');
                 return;
             }
 
@@ -500,6 +654,8 @@
             let users = DB.getUsers();
             let currentUser = DB.getCurrentUser();
 
+            targetUserId = targetUserId.trim();
+
             if (targetUserId === currentUser.id) {
                 showNotification('Нельзя отправить заявку самому себе!', 'error');
                 return;
@@ -507,7 +663,7 @@
 
             const targetUser = users.find(u => u.id === targetUserId);
             if (!targetUser) {
-                showNotification('Пользователь с таким ID или ссылкой не найден в системе!', 'error');
+                showNotification('Пользователь с ID ' + targetUserId + ' не найден в системе!', 'error');
                 return;
             }
 
@@ -529,7 +685,7 @@
             DB.updateUser(targetUser);
             DB.updateUser(currentUser);
 
-            showNotification('Заявка пользователю ' + targetUser.name + ' успешно отправлена!');
+            showNotification('Заявка пользователю ' + targetUser.name + ' (' + targetUser.id + ') отправлена!');
             activeTab = 'chats';
             renderApp();
         }
@@ -541,7 +697,7 @@
                 <div class="flex flex-col h-full overflow-hidden">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                         <h2 class="font-bold text-xl">Заявки в друзья</h2>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Пользователи, перешедшие по вашей ссылке</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Пользователи, отправившие вам заявку по ID или ссылке</p>
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-6">
@@ -550,7 +706,7 @@
                                 <div class="py-16 text-center text-slate-400">
                                     <i class="fa-solid fa-bell-slash text-4xl mb-3 opacity-50"></i>
                                     <p class="font-medium">Нет входящих заявок</p>
-                                    <p class="text-xs mt-1">Поделитесь вашей ссылкой на дружбу, чтобы получить заявку.</p>
+                                    <p class="text-xs mt-1">Сообщите свой ID другим пользователям.</p>
                                 </div>
                             ` : requests.map(senderId => {
                                 const users = DB.getUsers();
@@ -565,7 +721,7 @@
                                             </div>
                                             <div>
                                                 <h3 class="font-semibold text-sm">${escapeHtml(sender.name)}</h3>
-                                                <p class="text-xs text-slate-500">ID: ${sender.id}</p>
+                                                <p class="text-xs text-slate-500 font-mono">ID: ${sender.id}</p>
                                                 <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">${escapeHtml(sender.bio || '')}</p>
                                             </div>
                                         </div>
@@ -635,7 +791,7 @@
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
                         <div>
                             <h2 class="font-bold text-xl">Группы и Каналы</h2>
-                            <p class="text-xs text-slate-500 mt-1">Создавайте публичные группы для общения с несколькими пользователями</p>
+                            <p class="text-xs text-slate-500 mt-1">Публичные пространства для коллективного общения</p>
                         </div>
                         <button onclick="openCreateGroupModal()" class="px-4 py-2.5 bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md hover:bg-brand-600 transition">
                             <i class="fa-solid fa-plus mr-1.5"></i> Создать группу
@@ -648,7 +804,7 @@
                                 <div class="col-span-full py-16 text-center text-slate-400">
                                     <i class="fa-solid fa-users-rectangle text-4xl mb-3 opacity-50"></i>
                                     <p class="font-medium">Нет созданных групп</p>
-                                    <p class="text-xs mt-1">Нажмите кнопку выше, чтобы создать первую группу.</p>
+                                    <p class="text-xs mt-1">Нажмите кнопку создания, чтобы начать.</p>
                                 </div>
                             ` : groups.map(group => {
                                 const isMember = group.members && group.members.includes(currentUser.id);
@@ -675,7 +831,7 @@
                                                 </button>
                                             ` : `
                                                 <button onclick="joinGroup('${group.id}')" class="px-4 py-2 bg-brand-500 text-white font-medium text-xs rounded-xl shadow hover:bg-brand-600 transition">
-                                                    <i class="fa-solid fa-right-to-bracket mr-1.5"></i> Войти в группу
+                                                    <i class="fa-solid fa-right-to-bracket mr-1.5"></i> Войти
                                                 </button>
                                             `}
                                         </div>
@@ -689,15 +845,15 @@
                 <!-- Create Group Modal Backdrop -->
                 <div id="create-group-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
-                        <h3 class="font-bold text-lg mb-4">Создать новую группу</h3>
+                        <h3 class="font-bold text-lg mb-4">Создать новую группу / канал</h3>
                         <form onsubmit="handleCreateGroupSubmit(event)" class="space-y-4">
                             <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название группы</label>
-                                <input type="text" id="group-name-input" required placeholder="Например: Команда разработки" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название</label>
+                                <input type="text" id="group-name-input" required placeholder="Например: Новости Xena" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Описание</label>
-                                <textarea id="group-desc-input" rows="2" placeholder="О чем эта группа?" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500"></textarea>
+                                <textarea id="group-desc-input" rows="2" placeholder="О чем это сообщество?" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500"></textarea>
                             </div>
                             <div class="flex justify-end space-x-2 pt-2">
                                 <button type="button" onclick="closeCreateGroupModal()" class="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl">Отмена</button>
@@ -737,7 +893,7 @@
             groups.push(newGroup);
             DB.saveGroups(groups);
             closeCreateGroupModal();
-            showNotification('Группа успешно создана!');
+            showNotification('Группа создана!');
             activeChatId = newGroup.id;
             activeTab = 'chats';
             renderApp();
@@ -763,12 +919,11 @@
             return `
                 <div class="flex flex-col h-full overflow-hidden">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl">Профиль и настройки</h2>
+                        <h2 class="font-bold text-xl">Профиль и ID</h2>
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-6">
                         <div class="max-w-xl mx-auto space-y-6">
-                            <!-- Profile Card -->
                             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
                                 <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
                                     <div class="flex items-center space-x-4 mb-2">
@@ -777,7 +932,7 @@
                                         </div>
                                         <div>
                                             <h3 class="font-bold text-base">${escapeHtml(currentUser.name)}</h3>
-                                            <p class="text-xs text-slate-500">ID: ${currentUser.id}</p>
+                                            <p class="text-xs text-slate-500 font-mono">Ваш ID: <span class="font-bold text-brand-600">${currentUser.id}</span></p>
                                         </div>
                                     </div>
                                     <div>
@@ -785,19 +940,18 @@
                                         <input type="text" id="profile-name" value="${escapeHtml(currentUser.name)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL аватара (картинки)</label>
+                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL аватара</label>
                                         <input type="text" id="profile-avatar" value="${escapeHtml(currentUser.avatar || '')}" placeholder="https://example.com/avatar.jpg" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Статус «О себе»</label>
+                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Статус</label>
                                         <textarea id="profile-bio" rows="2" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">${escapeHtml(currentUser.bio || '')}</textarea>
                                     </div>
 
-                                    <!-- Theme Toggle -->
                                     <div class="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-800">
                                         <div>
                                             <h4 class="font-semibold text-sm">Темная тема</h4>
-                                            <p class="text-xs text-slate-500">Включить ночной режим интерфейса</p>
+                                            <p class="text-xs text-slate-500">Ночной режим интерфейса</p>
                                         </div>
                                         <input type="checkbox" id="profile-darkmode" ${currentUser.darkMode ? 'checked' : ''} class="w-5 h-5 accent-brand-500 rounded cursor-pointer">
                                     </div>
@@ -847,11 +1001,12 @@
             }
 
             const messages = getConversationMessages(currentUser.id, chatId, isGroup);
+            const stickers = DB.getStickers();
 
             return `
-                <div class="flex flex-col h-full bg-white dark:bg-slate-900">
+                <div class="flex flex-col h-full bg-white dark:bg-slate-900 relative">
                     <!-- Chat Top Header -->
-                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-10">
                         <div class="flex items-center space-x-3">
                             <button onclick="closeActiveChat()" class="md:hidden text-slate-500 hover:text-slate-800 p-2">
                                 <i class="fa-solid fa-arrow-left text-lg"></i>
@@ -883,7 +1038,7 @@
                             <div class="h-full flex flex-col items-center justify-center text-center text-slate-400">
                                 <i class="fa-regular fa-paper-plane text-3xl mb-2 opacity-50"></i>
                                 <p class="text-sm font-medium">История сообщений пуста</p>
-                                <p class="text-xs">Напишите первое сообщение в этот чат</p>
+                                <p class="text-xs">Отправьте первое сообщение или стикер</p>
                             </div>
                         ` : messages.map(msg => {
                             const isMe = msg.senderId === currentUser.id;
@@ -891,7 +1046,11 @@
                                 <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
                                     <div class="max-w-xs md:max-w-md rounded-2xl px-4 py-2.5 shadow-sm ${isMe ? 'bg-brand-500 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-none'}">
                                         ${isGroup && !isMe ? `<div class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(msg.senderName)}</div>` : ''}
-                                        <p class="text-sm break-words">${escapeHtml(msg.text)}</p>
+                                        ${msg.type === 'sticker' ? `
+                                            <img src="${escapeHtml(msg.stickerUrl)}" class="w-32 h-32 object-cover rounded-xl my-1 shadow">
+                                        ` : `
+                                            <p class="text-sm break-words">${escapeHtml(msg.text)}</p>
+                                        `}
                                         <div class="text-[10px] mt-1 text-right ${isMe ? 'text-brand-100' : 'text-slate-400'}">
                                             ${formatTime(msg.timestamp)}
                                         </div>
@@ -901,8 +1060,29 @@
                         }).join('')}
                     </div>
 
+                    <!-- Stickers Popup Picker -->
+                    ${isStickersOpen ? `
+                        <div class="absolute bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-2xl z-30 max-h-60 overflow-y-auto">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="font-bold text-xs uppercase tracking-wider text-slate-500">Стикеры</span>
+                                <button onclick="toggleStickersPicker()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2">
+                                ${stickers.map(st => `
+                                    <button onclick="sendStickerMessage('${chatId}', ${isGroup}, '${escapeHtml(st.url)}')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl flex flex-col items-center transition">
+                                        <img src="${escapeHtml(st.url)}" class="w-14 h-14 object-cover rounded-lg mb-1" onerror="this.src='https://placehold.co/80x80/22c55e/ffffff?text=Sticker'">
+                                        <span class="text-[10px] truncate w-full text-center text-slate-600 dark:text-slate-400">${escapeHtml(st.name)}</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
                     <!-- Message Input Form -->
-                    <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2">
+                    <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2 z-10">
+                        <button type="button" onclick="toggleStickersPicker()" title="Стикеры" class="p-3 text-slate-500 hover:text-brand-500 transition">
+                            <i class="fa-solid fa-face-smile text-xl"></i>
+                        </button>
                         <input type="text" id="chat-input" placeholder="Введите сообщение..." autocomplete="off" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
                         <button type="submit" class="w-12 h-12 bg-brand-500 hover:bg-brand-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-brand-500/20 transition shrink-0">
                             <i class="fa-solid fa-paper-plane text-sm"></i>
@@ -912,14 +1092,44 @@
             `;
         }
 
+        function toggleStickersPicker() {
+            isStickersOpen = !isStickersOpen;
+            renderApp();
+            scrollToBottom();
+        }
+
+        function sendStickerMessage(chatId, isGroup, stickerUrl) {
+            const currentUser = DB.getCurrentUser();
+            const newMessage = {
+                id: 'm_' + Math.random().toString(36).substr(2, 7),
+                senderId: currentUser.id,
+                senderName: currentUser.name,
+                chatId: chatId,
+                isGroup: isGroup,
+                type: 'sticker',
+                stickerUrl: stickerUrl,
+                timestamp: Date.now()
+            };
+
+            let messages = DB.getMessages();
+            messages.push(newMessage);
+            DB.saveMessages(messages);
+
+            isStickersOpen = false;
+            renderApp();
+            scrollToBottom();
+        }
+
         function openChat(chatId, isGroup) {
             activeChatId = chatId;
+            isStickersOpen = false;
             renderApp();
             scrollToBottom();
         }
 
         function closeActiveChat() {
             activeChatId = null;
+            isStickersOpen = false;
             renderApp();
         }
 
@@ -936,6 +1146,7 @@
                 senderName: currentUser.name,
                 chatId: chatId,
                 isGroup: isGroup,
+                type: 'text',
                 text: text,
                 timestamp: Date.now()
             };
@@ -949,7 +1160,6 @@
             scrollToBottom();
         }
 
-        // Call Simulation Modal
         function startCall(peerName, type) {
             activeCall = { peerName, type, status: 'calling' };
             renderApp();
@@ -986,10 +1196,10 @@
             `;
         }
 
-        // Helpers
         function switchTab(tab) {
             activeTab = tab;
             if (tab !== 'chats') activeChatId = null;
+            isStickersOpen = false;
             renderApp();
         }
 
