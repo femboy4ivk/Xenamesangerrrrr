@@ -252,8 +252,8 @@
         <div class="modal-card" style="padding: 1.5rem;">
             <h3 style="font-size: 16px; font-weight: 700; color: var(--text-purple); margin-bottom: 1rem;"><i class="fa-solid fa-user-plus"></i> Добавить друга</h3>
             <div style="margin-bottom: 1rem;">
-                <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Юзернейм пользователя</label>
-                <input type="text" id="friend-username-input" placeholder="@username" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
+                <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-purple); margin-bottom: 4px;">Юзернейм или Имя юза</label>
+                <input type="text" id="friend-username-input" placeholder="@alex или Alex" style="width: 100%; padding: 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--border-input); font-size: 13px; color: var(--text-main);">
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
                 <button onclick="closeAddFriendModal()" style="padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary);">Отмена</button>
@@ -353,8 +353,8 @@
             document.getElementById('sidebar-toggle-btn').style.display = 'block';
         }
 
-        let rooms = [];
-        let friendRequests = []; // Изначально пусто без Аны и Максима
+        let rooms = JSON.parse(localStorage.getItem('xena_rooms')) || [];
+        let friendRequests = JSON.parse(localStorage.getItem('xena_requests')) || [];
 
         let activeRoomId = null;
         let currentTab = 'all';
@@ -377,6 +377,11 @@
                 initApp();
             }
         };
+
+        function saveAppData() {
+            localStorage.setItem('xena_rooms', JSON.stringify(rooms));
+            localStorage.setItem('xena_requests', JSON.stringify(friendRequests));
+        }
 
         function changeTheme(theme) {
             document.body.setAttribute('data-theme', theme);
@@ -465,20 +470,24 @@
             const list = document.getElementById('rooms-list');
             list.innerHTML = '';
 
+            const badge = document.getElementById('badge-requests');
+            if (friendRequests.length === 0) {
+                badge.style.display = 'none';
+            } else {
+                badge.style.display = 'block';
+            }
+
             if (currentTab === 'requests') {
-                const badge = document.getElementById('badge-requests');
                 if (friendRequests.length === 0) {
-                    badge.style.display = 'none';
                     list.innerHTML = `<div style="padding: 2rem; text-align: center; font-size: 12px; color: var(--text-secondary); opacity: 0.6;">Нет новых заявок</div>`;
                     return;
                 }
-                badge.style.display = 'block';
                 friendRequests.forEach(req => {
                     const div = document.createElement('div');
                     div.style.cssText = `padding: 10px 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color);`;
                     div.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">${req.name.charAt(0)}</div>
+                            <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">${req.name.charAt(0).toUpperCase()}</div>
                             <div>
                                 <span style="font-size: 13px; font-weight: 600; color: var(--text-purple); display: block;">${req.name}</span>
                                 <span style="font-size: 10px; color: var(--text-secondary);">${req.tag}</span>
@@ -535,21 +544,24 @@
             });
         }
 
-        // Логика добавления в друзья
+        // Логика добавления в друзья (юз как имя)
         function openAddFriendModal() { document.getElementById('add-friend-modal').classList.remove('hidden'); }
         function closeAddFriendModal() { document.getElementById('add-friend-modal').classList.add('hidden'); document.getElementById('friend-username-input').value = ''; }
         
         function sendFriendRequest() {
-            let tag = document.getElementById('friend-username-input').value.trim();
-            if(!tag) return;
-            if(!tag.startsWith('@')) tag = '@' + tag;
+            let inputVal = document.getElementById('friend-username-input').value.trim();
+            if(!inputVal) return;
+            
+            let tag = inputVal.startsWith('@') ? inputVal : '@' + inputVal;
+            let realName = inputVal.startsWith('@') ? inputVal.substring(1) : inputVal;
 
             if(tag === currentUser.tag) {
                 alert('Нельзя добавить самого себя');
                 return;
             }
 
-            friendRequests.push({ name: tag.replace('@', ''), tag: tag });
+            friendRequests.push({ name: realName, tag: tag });
+            saveAppData();
             closeAddFriendModal();
             switchTab('requests');
         }
@@ -567,12 +579,14 @@
                 messages: [{ sender: req.name, text: 'Привет! Мы добавили друг друга в контакты Xena.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
             };
             rooms.push(newRoom);
+            saveAppData();
             renderSidebarContent();
             selectRoom(newRoom.id);
         }
 
         function rejectRequest(tag) {
             friendRequests = friendRequests.filter(r => r.tag !== tag);
+            saveAppData();
             renderSidebarContent();
         }
 
@@ -601,6 +615,7 @@
             };
 
             rooms.push(newRoom);
+            saveAppData();
             closeCreateModal();
             switchTab(creationType === 'group' ? 'groups' : 'channels');
             selectRoom(newRoom.id);
@@ -712,6 +727,7 @@
             toggleRoomMenu();
             if(!activeRoomId) return;
             rooms = rooms.filter(r => r.id !== activeRoomId);
+            saveAppData();
             activeRoomId = null;
             document.getElementById('active-room-name').innerText = 'Выберите или создайте чат';
             document.getElementById('active-room-info').innerText = 'пусто';
@@ -769,6 +785,7 @@
             const room = rooms.find(r => r.id === activeRoomId);
             
             room.messages.push({ sender: currentUser.name, text: text, time: timeNow, file: null });
+            saveAppData();
             input.value = '';
             renderMessages();
             renderSidebarContent();
@@ -789,6 +806,7 @@
                     time: timeNow,
                     file: { name: file.name, type: file.type, url: e.target.result }
                 });
+                saveAppData();
                 renderMessages();
                 renderSidebarContent();
             };
