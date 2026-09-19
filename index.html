@@ -4,941 +4,910 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Xena Messenger</title>
-    <!-- Установка Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Иконки FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Шрифт Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Настройка Tailwind -->
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: {
-                        brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Стилизация скроллбара */
+        body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 9999px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.8); }
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.3); }
-        .dark .glass-panel { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.8); }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.05); }
+        }
     </style>
 </head>
-<body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden transition-colors duration-200">
+<body class="h-full bg-slate-950 text-slate-100 flex overflow-hidden">
 
-    <!-- Корневой контейнер приложения -->
-    <div id="app" class="h-full w-full flex flex-col items-center justify-center">
-        <!-- Экран загрузки (отображается до инициализации Firebase) -->
-        <div class="animate-pulse flex flex-col items-center space-y-4">
-            <div class="w-16 h-16 bg-brand-500 rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-brand-500/30">
-                <i class="fa-solid fa-bolt"></i>
-            </div>
-            <p class="text-slate-500 font-medium">Подключение к серверам Xena...</p>
-        </div>
+    <div id="app" class="flex h-full w-full relative">
+        <!-- Main application rendered via JS -->
     </div>
 
-    <!-- Модальные окна и уведомления (вне основного потока рендера React-style) -->
-    <div id="modal-root" class="relative z-50"></div>
-    <div id="toast-root" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
+    <!-- Custom Notification/Modal container -->
+    <div id="modal-root"></div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script>
+        const STORAGE_KEY = 'xena_messenger_db_v3';
+        const CHANNEL_NAME = 'xena_messenger_sync_v3';
+        const broadcastChannel = new BroadcastChannel(CHANNEL_NAME);
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'xena-messenger-auto';
-        
-        // Глобальное состояние приложения
-        window.AppState = {
-            db: null,
-            auth: null,
-            users: [],
-            messages: [],
-            groups: [],
-            stickers: [
-                { id: 'st_1', name: 'Огонь', url: 'https://placehold.co/120x120/22c55e/ffffff?text=🔥' },
-                { id: 'st_2', name: 'Сердце', url: 'https://placehold.co/120x120/ef4444/ffffff?text=❤️' }
-            ],
-            currentUser: null,
-            activeTab: 'chats',
-            activeChatId: null,
-            authMode: 'login',
-            isStickersOpen: false,
-            isPencilMenuOpen: false,
-            callState: null // { active: bool, type: 'video' | 'audio', name: string }
+        // Helper: generate 10-digit zero-padded ID
+        function generateXenaId() {
+            let db = loadDB();
+            let nextId = db.counter || 1;
+            db.counter = nextId + 1;
+            saveDB(db);
+            return String(nextId).padStart(10, '0');
+        }
+
+        // Default database structure
+        function getInitialDB() {
+            const defaultId = "0000000001";
+            return {
+                counter: 2,
+                users: {
+                    [defaultId]: {
+                        id: defaultId,
+                        name: "Xena User",
+                        username: "xena_user",
+                        avatar: "https://placehold.co/150/6366f1/ffffff?text=X",
+                        status: "Online",
+                        bio: "Welcome to Xena Messenger!"
+                    }
+                },
+                chats: {}, // chatId -> { id, type: 'direct'|'group'|'channel', name, avatar, members: [userIds], adminId }
+                messages: {}, // chatId -> [ { id, senderId, text, timestamp, type, mediaUrl, stickerUrl } ]
+                stickers: [
+                    { id: 's1', url: 'https://placehold.co/120/f43f5e/ffffff?text=❤️', name: 'Heart' },
+                    { id: 's2', url: 'https://placehold.co/120/10b981/ffffff?text=🔥', name: 'Fire' },
+                    { id: 's3', url: 'https://placehold.co/120/f59e0b/ffffff?text=🎉', name: 'Party' },
+                    { id: 's4', url: 'https://placehold.co/120/3b82f6/ffffff?text=👍', name: 'Thumbs Up' }
+                ],
+                friendRequests: {} // userId -> [ requesterId ]
+            };
+        }
+
+        function loadDB() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                if (!data) {
+                    const initial = getInitialDB();
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+                    return initial;
+                }
+                return JSON.parse(data);
+            } catch (e) {
+                return getInitialDB();
+            }
+        }
+
+        function saveDB(db, triggerSync = true) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+            if (triggerSync) {
+                broadcastChannel.postMessage({ type: 'DB_UPDATE', timestamp: Date.now() });
+            }
+        }
+
+        // Active session profile state
+        let currentUser = null;
+        let activeChatId = null;
+        let activeTab = 'chats'; // 'chats' | 'contacts' | 'settings' | 'stickers'
+        let callActive = false;
+        let callPeer = null;
+        let callType = 'audio'; // 'audio' | 'video'
+        let callTimer = 0;
+        let callInterval = null;
+
+        // Listen to cross-tab updates
+        broadcastChannel.onmessage = (event) => {
+            if (event.data && event.data.type === 'DB_UPDATE') {
+                refreshAppState();
+            }
         };
 
-        window.showNotification = (msg, type = 'success') => {
-            const toastRoot = document.getElementById('toast-root');
-            const toast = document.createElement('div');
-            const icon = type === 'error' ? 'fa-triangle-exclamation text-red-500' : 'fa-circle-check text-brand-500';
-            toast.className = `bg-white dark:bg-slate-900 text-slate-800 dark:text-white px-5 py-3 rounded-2xl shadow-xl flex items-center space-x-3 border border-slate-100 dark:border-slate-800 transform transition-all duration-300 translate-x-full opacity-0`;
-            toast.innerHTML = `<i class="fa-solid ${icon} text-xl"></i><span class="text-sm font-medium">${window.escapeHtml(msg)}</span>`;
-            toastRoot.appendChild(toast);
-            
-            // Анимация появления
-            requestAnimationFrame(() => {
-                toast.classList.remove('translate-x-full', 'opacity-0');
+        window.addEventListener('storage', (e) => {
+            if (e.key === STORAGE_KEY) {
+                refreshAppState();
+            }
+        });
+
+        function initApp() {
+            let db = loadDB();
+            // Check if current user is set in session or default to first user
+            let sessionUserId = sessionStorage.getItem('xena_current_user_id');
+            if (!sessionUserId || !db.users[sessionUserId]) {
+                // Pick the first user or create one
+                const userIds = Object.keys(db.users);
+                sessionUserId = userIds[0];
+                sessionStorage.setItem('xena_current_user_id', sessionUserId);
+            }
+            currentUser = db.users[sessionUserId];
+            renderApp();
+        }
+
+        function refreshAppState() {
+            let db = loadDB();
+            if (currentUser && db.users[currentUser.id]) {
+                currentUser = db.users[currentUser.id];
+            }
+            renderApp();
+        }
+
+        function switchUser(userId) {
+            let db = loadDB();
+            if (db.users[userId]) {
+                sessionStorage.setItem('xena_current_user_id', userId);
+                currentUser = db.users[userId];
+                activeChatId = null;
+                renderApp();
+            }
+        }
+
+        function createNewAccount(name, username, avatar) {
+            let db = loadDB();
+            const newId = generateXenaId();
+            db.users[newId] = {
+                id: newId,
+                name: name || `User ${newId.slice(-4)}`,
+                username: username || `user_${newId}`,
+                avatar: avatar || `https://placehold.co/150/6366f1/ffffff?text=${(name||'U')[0].toUpperCase()}`,
+                status: 'Online',
+                bio: 'Hello on Xena Messenger!'
+            };
+            saveDB(db);
+            switchUser(newId);
+        }
+
+        function renderApp() {
+            const root = document.getElementById('app');
+            let db = loadDB();
+
+            root.innerHTML = `
+                <!-- Sidebar / Navigation -->
+                <div class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col h-full z-10">
+                    <!-- Top User Info Bar -->
+                    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center space-x-3 cursor-pointer" onclick="openProfileModal()">
+                            <img src="${currentUser.avatar}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border-2 border-indigo-500" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=X'">
+                            <div>
+                                <h3 class="font-semibold text-sm text-slate-200">${escapeHtml(currentUser.name)}</h3>
+                                <p class="text-xs text-indigo-400 font-mono">ID: ${currentUser.id}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <!-- Pencil Menu for adding friends, groups, channels, stickers -->
+                            <div class="relative">
+                                <button onclick="togglePencilMenu(event)" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 transition">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <div id="pencil-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
+                                    <button onclick="openAddFriendModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-400 flex items-center space-x-3">
+                                        <i class="fa-solid fa-user-plus w-5"></i><span>Add Friend (by ID / Link)</span>
+                                    </button>
+                                    <button onclick="openCreateGroupModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-400 flex items-center space-x-3">
+                                        <i class="fa-solid fa-users w-5"></i><span>Create Group</span>
+                                    </button>
+                                    <button onclick="openCreateChannelModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-400 flex items-center space-x-3">
+                                        <i class="fa-solid fa-bullhorn w-5"></i><span>Create Channel</span>
+                                    </button>
+                                    <button onclick="openStickerCreatorModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-400 flex items-center space-x-3">
+                                        <i class="fa-solid fa-face-smile w-5"></i><span>Create Sticker</span>
+                                    </button>
+                                    <div class="border-t border-slate-800 my-1"></div>
+                                    <button onclick="openSwitchAccountModal()" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-600/20 flex items-center space-x-3">
+                                        <i class="fa-solid fa-right-left w-5"></i><span>Switch / New Account</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs -->
+                    <div class="flex border-b border-slate-800 bg-slate-900/50">
+                        <button onclick="setActiveTab('chats')" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-center border-b-2 ${activeTab === 'chats' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}">Chats</button>
+                        <button onclick="setActiveTab('contacts')" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-center border-b-2 ${activeTab === 'contacts' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}">Contacts</button>
+                        <button onclick="setActiveTab('stickers')" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-center border-b-2 ${activeTab === 'stickers' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}">Stickers</button>
+                    </div>
+
+                    <!-- Search bar -->
+                    <div class="p-3">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-xs text-slate-500"></i>
+                            <input type="text" id="sidebar-search" oninput="handleSearch(this.value)" placeholder="Search chats or Xena IDs..." class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+                        </div>
+                    </div>
+
+                    <!-- Tab Content List -->
+                    <div class="flex-1 overflow-y-auto" id="sidebar-list">
+                        ${renderSidebarList(db)}
+                    </div>
+                </div>
+
+                <!-- Main Chat Area / Content View -->
+                <div class="flex-1 flex flex-col h-full bg-slate-950 relative" id="main-content-area">
+                    ${activeChatId && db.chats[activeChatId] ? renderChatView(db, db.chats[activeChatId]) : renderWelcomeView(db)}
+                </div>
+
+                <!-- Active Call Overlay Modal -->
+                ${callActive ? renderCallOverlay() : ''}
+            `;
+
+            // Close dropdown when clicking outside
+            window.onclick = function(event) {
+                if (!event.target.closest('.relative')) {
+                    const dropdown = document.getElementById('pencil-dropdown');
+                    if (dropdown && !dropdown.classList.contains('hidden')) {
+                        dropdown.classList.add('hidden');
+                    }
+                }
+            };
+        }
+
+        function togglePencilMenu(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('pencil-dropdown');
+            if (dd) dd.classList.toggle('hidden');
+        }
+
+        function setActiveTab(tab) {
+            activeTab = tab;
+            renderApp();
+        }
+
+        function renderSidebarList(db) {
+            if (activeTab === 'stickers') {
+                return `
+                    <div class="p-4 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Global Sticker Market</h4>
+                            <button onclick="openStickerCreatorModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition">+ Create</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            ${db.stickers.map(s => `
+                                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center space-y-2 hover:border-indigo-500 transition">
+                                    <img src="${s.url}" alt="${s.name}" class="w-16 h-16 object-contain rounded-lg" onerror="this.src='https://placehold.co/120/6366f1/ffffff?text=Sticker'">
+                                    <span class="text-xs text-slate-300 font-medium truncate w-full text-center">${escapeHtml(s.name)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (activeTab === 'contacts') {
+                const allUsers = Object.values(db.users).filter(u => u.id !== currentUser.id);
+                return `
+                    <div class="p-3 space-y-2">
+                        <div class="text-xs font-bold uppercase tracking-wider text-slate-500 px-2 mb-2">All Xena Users</div>
+                        ${allUsers.length === 0 ? '<div class="text-center py-8 text-xs text-slate-500">No other users yet. Use pencil menu to create or invite!</div>' : ''}
+                        ${allUsers.map(u => `
+                            <div onclick="startDirectChat('${u.id}')" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-900 cursor-pointer transition group">
+                                <div class="flex items-center space-x-3">
+                                    <img src="${u.avatar}" class="w-10 h-10 rounded-full object-cover border border-slate-700" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=U'">
+                                    <div>
+                                        <div class="text-sm font-medium text-slate-200 group-hover:text-indigo-400 transition">${escapeHtml(u.name)}</div>
+                                        <div class="text-xs text-indigo-400 font-mono">ID: ${u.id}</div>
+                                    </div>
+                                </div>
+                                <button class="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                    <i class="fa-solid fa-message text-xs"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            // Chats tab
+            const userChats = Object.values(db.chats).filter(c => c.members.includes(currentUser.id));
+            return `
+                <div class="p-2 space-y-1">
+                    ${userChats.length === 0 ? '<div class="text-center py-12 text-xs text-slate-500 px-4">No active chats. Click the pencil icon to start messaging or make friends!</div>' : ''}
+                    ${userChats.map(chat => {
+                        const messages = db.messages[chat.id] || [];
+                        const lastMsg = messages[messages.length - 1];
+                        let chatName = chat.name;
+                        let chatAvatar = chat.avatar;
+
+                        if (chat.type === 'direct') {
+                            const peerId = chat.members.find(id => id !== currentUser.id);
+                            const peer = db.users[peerId];
+                            if (peer) {
+                                chatName = peer.name;
+                                chatAvatar = peer.avatar;
+                            }
+                        }
+
+                        return `
+                            <div onclick="selectChat('${chat.id}')" class="flex items-center space-x-3 p-3 rounded-xl cursor-pointer transition ${activeChatId === chat.id ? 'bg-indigo-600/15 border border-indigo-500/30' : 'hover:bg-slate-900'}">
+                                <div class="relative">
+                                    <img src="${chatAvatar}" class="w-12 h-12 rounded-full object-cover border border-slate-700" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=C'">
+                                    ${chat.type === 'group' ? '<span class="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">Grp</span>' : ''}
+                                    ${chat.type === 'channel' ? '<span class="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">Ch</span>' : ''}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <h4 class="text-sm font-semibold text-slate-200 truncate">${escapeHtml(chatName)}</h4>
+                                        <span class="text-[10px] text-slate-500">${lastMsg ? formatTime(lastMsg.timestamp) : ''}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-400 truncate">${lastMsg ? escapeHtml(lastMsg.text || (lastMsg.stickerUrl ? '[Sticker]' : '[Media]')) : 'No messages yet'}</p>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderWelcomeView(db) {
+            return `
+                <div class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-950">
+                    <div class="w-20 h-20 bg-indigo-600/10 rounded-2xl flex items-center justify-center text-indigo-400 text-3xl mb-4 border border-indigo-500/20">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-200 mb-2">Welcome to Xena Messenger</h2>
+                    <p class="text-sm text-slate-400 max-w-sm mb-6">Select a chat from the sidebar or click the pencil menu to add friends, create groups, channels, or design stickers instantly.</p>
+                    <div class="flex space-x-3">
+                        <button onclick="openAddFriendModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20">Add Friend</button>
+                        <button onclick="openCreateGroupModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition">Create Group</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderChatView(db, chat) {
+            let chatName = chat.name;
+            let chatAvatar = chat.avatar;
+            let peerId = null;
+
+            if (chat.type === 'direct') {
+                peerId = chat.members.find(id => id !== currentUser.id);
+                const peer = db.users[peerId];
+                if (peer) {
+                    chatName = peer.name;
+                    chatAvatar = peer.avatar;
+                }
+            }
+
+            const messages = db.messages[chat.id] || [];
+
+            return `
+                <!-- Chat Header -->
+                <div class="px-6 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 backdrop-blur z-10">
+                    <div class="flex items-center space-x-3">
+                        <img src="${chatAvatar}" class="w-10 h-10 rounded-full object-cover border border-slate-700" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=C'">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-200">${escapeHtml(chatName)}</h3>
+                            <p class="text-xs text-slate-400">${chat.type === 'direct' ? 'Online' : chat.members.length + ' members'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${chat.type === 'direct' ? `
+                            <button onclick="startCall('${peerId}', 'audio')" class="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-indigo-400 flex items-center justify-center transition" title="Voice Call">
+                                <i class="fa-solid fa-phone text-xs"></i>
+                            </button>
+                            <button onclick="startCall('${peerId}', 'video')" class="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-indigo-400 flex items-center justify-center transition" title="Video Call">
+                                <i class="fa-solid fa-video text-xs"></i>
+                            </button>
+                        ` : ''}
+                        <button onclick="openChatInfoModal('${chat.id}')" class="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-indigo-400 flex items-center justify-center transition" title="Chat Info">
+                            <i class="fa-solid fa-circle-info text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Container -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-4" id="messages-container">
+                    ${messages.length === 0 ? '<div class="text-center py-12 text-xs text-slate-500">No messages yet. Send a greeting or sticker!</div>' : ''}
+                    ${messages.map(msg => {
+                        const isMe = msg.senderId === currentUser.id;
+                        const sender = db.users[msg.senderId] || { name: 'Unknown', avatar: 'https://placehold.co/150/6366f1/ffffff?text=U' };
+                        return `
+                            <div class="flex ${isMe ? 'justify-end' : 'justify-start'} items-end space-x-2">
+                                ${!isMe && chat.type !== 'direct' ? `<img src="${sender.avatar}" class="w-7 h-7 rounded-full object-cover mb-1" title="${escapeHtml(sender.name)}">` : ''}
+                                <div class="max-w-[70%] rounded-2xl px-4 py-3 ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none'}">
+                                    ${!isMe && chat.type !== 'direct' ? `<div class="text-[10px] font-semibold text-indigo-400 mb-1">${escapeHtml(sender.name)}</div>` : ''}
+                                    ${msg.stickerUrl ? `<img src="${msg.stickerUrl}" class="w-32 h-32 object-contain rounded-xl my-1">` : ''}
+                                    ${msg.text ? `<p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(msg.text)}</p>` : ''}
+                                    <div class="text-[10px] ${isMe ? 'text-indigo-200' : 'text-slate-500'} text-right mt-1">${formatTime(msg.timestamp)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <!-- Message Input Footer -->
+                <div class="p-4 border-t border-slate-800 bg-slate-900/40 relative">
+                    <!-- Sticker picker popover -->
+                    <div id="sticker-picker" class="hidden absolute bottom-20 left-4 bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl w-72 z-30">
+                        <div class="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Send Sticker</div>
+                        <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                            ${db.stickers.map(s => `
+                                <img src="${s.url}" onclick="sendSticker('${s.url}')" class="w-14 h-14 object-contain rounded-xl hover:bg-slate-800 cursor-pointer p-1 transition" title="${escapeHtml(s.name)}">
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <button onclick="toggleStickerPicker(event)" class="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-indigo-400 flex items-center justify-center transition">
+                            <i class="fa-solid fa-face-smile"></i>
+                        </button>
+                        <input type="text" id="message-input" onkeydown="if(event.key==='Enter') sendMessage()" placeholder="Type a message..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+                        <button onclick="sendMessage()" class="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition shadow-lg shadow-indigo-600/20">
+                            <i class="fa-solid fa-paper-plane text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Auto scroll messages to bottom when rendered
+        setTimeout(() => {
+            const container = document.getElementById('messages-container');
+            if (container) container.scrollTop = container.scrollHeight;
+        }, 50);
+
+        function selectChat(chatId) {
+            activeChatId = chatId;
+            renderApp();
+            setTimeout(() => {
+                const container = document.getElementById('messages-container');
+                if (container) container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
+
+        function startDirectChat(peerId) {
+            let db = loadDB();
+            if (!db.users[peerId]) return;
+
+            // Check if direct chat already exists
+            let existingChatId = null;
+            Object.values(db.chats).forEach(c => {
+                if (c.type === 'direct' && c.members.includes(currentUser.id) && c.members.includes(peerId)) {
+                    existingChatId = c.id;
+                }
             });
 
-            setTimeout(() => {
-                toast.classList.add('translate-x-full', 'opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        };
-
-        window.escapeHtml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        window.scrollToBottom = () => setTimeout(() => { const c = document.getElementById('messages-container'); if (c) c.scrollTop = c.scrollHeight; }, 50);
-
-        async function initFirebase() {
-            try {
-                if (typeof __firebase_config === 'undefined') {
-                    throw new Error("Окружение не предоставило __firebase_config. Запуск невозможен.");
-                }
-                
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                const db = getFirestore(app);
-
-                window.AppState.db = db;
-                window.AppState.auth = auth;
-
-                // Авторизация Canvas
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Запуск слушателей данных
-                startDatabaseListeners(db);
-
-            } catch (error) {
-                console.error("Firebase Init Error:", error);
-                document.getElementById('app').innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-full text-red-500 space-y-4">
-                        <i class="fa-solid fa-triangle-exclamation text-4xl"></i>
-                        <p class="font-bold">Критическая ошибка запуска.</p>
-                        <p class="text-sm text-slate-500">${error.message}</p>
-                    </div>`;
-            }
-        }
-
-        const publicPath = (col) => collection(window.AppState.db, 'artifacts', appId, 'public', 'data', col);
-        const publicDoc = (col, docId) => doc(window.AppState.db, 'artifacts', appId, 'public', 'data', col, String(docId));
-
-        function startDatabaseListeners(db) {
-            const savedId = localStorage.getItem('xena_auto_user_id');
-
-            // Слушатель пользователей
-            onSnapshot(publicPath('users'), (snapshot) => {
-                const users = [];
-                snapshot.forEach(doc => users.push(doc.data()));
-                window.AppState.users = users;
-
-                // Поддержка сессии через localStorage (т.к. Canvas дает один токен, а нам нужно тестить мульти-юзерность)
-                if (savedId && !window.AppState.currentUser) {
-                    const user = users.find(u => u.id === savedId);
-                    if (user) window.AppState.currentUser = user;
-                } else if (window.AppState.currentUser) {
-                    const freshUser = users.find(u => u.id === window.AppState.currentUser.id);
-                    if (freshUser) window.AppState.currentUser = freshUser;
-                }
-                
-                checkUrlForFriendRequest(); // Проверяем URL при получении пользователей
-                window.renderApp();
-            }, (err) => console.error(err));
-
-            // Слушатель сообщений
-            onSnapshot(publicPath('messages'), (snapshot) => {
-                const messages = [];
-                snapshot.forEach(doc => messages.push({ ...doc.data(), docId: doc.id }));
-                window.AppState.messages = messages;
-                window.renderApp();
-                window.scrollToBottom();
-            }, (err) => console.error(err));
-
-            // Слушатель групп и каналов
-            onSnapshot(publicPath('groups'), (snapshot) => {
-                const groups = [];
-                snapshot.forEach(doc => groups.push(doc.data()));
-                window.AppState.groups = groups;
-                window.renderApp();
-            }, (err) => console.error(err));
-
-            // Слушатель глобальных стикеров
-            onSnapshot(publicPath('stickers'), (snapshot) => {
-                const cloudStickers = [];
-                snapshot.forEach(doc => cloudStickers.push(doc.data()));
-                const defaultIds = ['st_1', 'st_2'];
-                window.AppState.stickers = [
-                    ...window.AppState.stickers.filter(s => defaultIds.includes(s.id)), 
-                    ...cloudStickers
-                ];
-                window.renderApp();
-            }, (err) => console.error(err));
-        }
-
-        let urlChecked = false;
-        function checkUrlForFriendRequest() {
-            if (urlChecked || !window.AppState.currentUser || window.AppState.users.length === 0) return;
-            urlChecked = true;
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const targetId = urlParams.get('add');
-            
-            if (targetId) {
-                // Очищаем URL, чтобы не спамить при перезагрузке
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-                if (targetId === window.AppState.currentUser.id) {
-                    return window.showNotification("Это ваша собственная ссылка", "error");
-                }
-                // Автоматически отправляем заявку
-                setTimeout(() => window.autoSendFriendRequest(targetId), 1000);
-            }
-        }
-
-        window.DB = {
-            getNextUserId() {
-                const users = window.AppState.users;
-                if (users.length === 0) return '0000000001';
-                let maxId = 0;
-                users.forEach(u => {
-                    const num = parseInt(u.id, 10);
-                    if (!isNaN(num) && num > maxId) maxId = num;
-                });
-                return String(maxId + 1).padStart(10, '0');
-            },
-            async registerUser(name, email, password) {
-                const newId = this.getNextUserId();
-                const newUser = {
-                    id: newId,
-                    name,
-                    email,
-                    password, // Локальная имитация для теста нескольких акков
-                    bio: 'Всем привет! Я в Xena.',
-                    avatar: '',
-                    darkMode: false,
-                    friends: [],
-                    friendRequests: [],
-                    sentRequests: []
-                };
-                try {
-                    await setDoc(publicDoc('users', newId), newUser);
-                    window.AppState.currentUser = newUser;
-                    localStorage.setItem('xena_auto_user_id', newId);
-                    window.showNotification('Успешно! Ваш ID: ' + newId);
-                    checkUrlForFriendRequest();
-                    window.renderApp();
-                } catch (e) {
-                    window.showNotification('Ошибка регистрации', 'error');
-                }
-            },
-            async updateUser(userObj) {
-                if (!userObj || !userObj.id) return;
-                try { await setDoc(publicDoc('users', userObj.id), userObj, { merge: true }); } 
-                catch (e) { console.error(e); }
-            }
-        };
-
-        window.handleAuthSubmit = (e) => {
-            e.preventDefault();
-            const identifier = document.getElementById('auth-email').value.trim();
-            const password = document.getElementById('auth-password').value.trim();
-
-            if (window.AppState.authMode === 'register') {
-                const name = document.getElementById('auth-name').value.trim();
-                window.DB.registerUser(name, identifier, password);
+            if (existingChatId) {
+                selectChat(existingChatId);
             } else {
-                const user = window.AppState.users.find(u => 
-                    (u.email.toLowerCase() === identifier.toLowerCase() || u.id === identifier) && u.password === password
-                );
-                if (user) {
-                    window.AppState.currentUser = user;
-                    localStorage.setItem('xena_auto_user_id', user.id);
-                    window.showNotification('С возвращением, ' + user.name + '!');
-                    checkUrlForFriendRequest();
-                    window.renderApp();
-                } else {
-                    window.showNotification('Неверный логин, ID или пароль', 'error');
-                }
+                const chatId = 'chat_' + Math.random().toString(36).substring(2, 9);
+                db.chats[chatId] = {
+                    id: chatId,
+                    type: 'direct',
+                    name: db.users[peerId].name,
+                    avatar: db.users[peerId].avatar,
+                    members: [currentUser.id, peerId]
+                };
+                saveDB(db);
+                selectChat(chatId);
             }
-        };
+        }
 
-        window.handleLogout = () => {
-            window.AppState.currentUser = null;
-            window.AppState.activeChatId = null;
-            localStorage.removeItem('xena_auto_user_id');
-            window.renderApp();
-        };
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            if (!input || !input.value.trim() || !activeChatId) return;
 
-        window.setAuthMode = (mode) => {
-            window.AppState.authMode = mode;
-            window.renderApp();
-        };
+            let db = loadDB();
+            if (!db.messages[activeChatId]) db.messages[activeChatId] = [];
 
-        window.autoSendFriendRequest = async (targetUserId) => {
-            let currentUser = { ...window.AppState.currentUser };
-            targetUserId = String(targetUserId).trim();
-
-            if (targetUserId === currentUser.id) return window.showNotification('Нельзя добавить себя!', 'error');
-            
-            const targetUser = window.AppState.users.find(u => u.id === targetUserId);
-            if (!targetUser) return window.showNotification('Пользователь ' + targetUserId + ' не найден!', 'error');
-
-            currentUser.friends = currentUser.friends || [];
-            if (currentUser.friends.includes(targetUserId)) return window.showNotification('Пользователь уже в друзьях!', 'error');
-
-            const updatedTarget = { ...targetUser };
-            updatedTarget.friendRequests = updatedTarget.friendRequests || [];
-            
-            if (updatedTarget.friendRequests.includes(currentUser.id)) {
-                return window.showNotification('Заявка уже была отправлена!', 'error');
-            }
-            
-            updatedTarget.friendRequests.push(currentUser.id);
-
-            currentUser.sentRequests = currentUser.sentRequests || [];
-            if (!currentUser.sentRequests.includes(targetUser.id)) currentUser.sentRequests.push(targetUser.id);
-
-            await window.DB.updateUser(updatedTarget);
-            await window.DB.updateUser(currentUser);
-            window.showNotification(`Заявка отправлена пользователю ${targetUser.name}!`);
-            window.closeModal();
-        };
-
-        window.acceptFriendRequest = async (senderId) => {
-            let currentUser = { ...window.AppState.currentUser };
-            const sender = window.AppState.users.find(u => u.id === senderId);
-            if (!sender) return;
-
-            let updatedSender = { ...sender };
-            currentUser.friends = currentUser.friends || [];
-            if (!currentUser.friends.includes(sender.id)) currentUser.friends.push(sender.id);
-
-            updatedSender.friends = updatedSender.friends || [];
-            if (!updatedSender.friends.includes(currentUser.id)) updatedSender.friends.push(currentUser.id);
-
-            currentUser.friendRequests = currentUser.friendRequests.filter(id => id !== senderId);
-            updatedSender.sentRequests = (updatedSender.sentRequests || []).filter(id => id !== currentUser.id);
-
-            await window.DB.updateUser(currentUser);
-            await window.DB.updateUser(updatedSender);
-            window.showNotification('Пользователь добавлен в друзья!');
-        };
-
-        window.handleSendMessage = async (e, chatId, isGroup) => {
-            e.preventDefault();
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if (!text) return;
-
-            await addDoc(publicPath('messages'), {
-                senderId: window.AppState.currentUser.id,
-                senderName: window.AppState.currentUser.name,
-                chatId: chatId,
-                isGroup: isGroup,
-                type: 'text',
-                text: text,
+            db.messages[activeChatId].push({
+                id: 'msg_' + Math.random().toString(36).substring(2, 9),
+                senderId: currentUser.id,
+                text: input.value.trim(),
                 timestamp: Date.now()
             });
-            input.value = '';
-        };
 
-        window.sendStickerMessage = async (chatId, isGroup, stickerUrl) => {
-            await addDoc(publicPath('messages'), {
-                senderId: window.AppState.currentUser.id,
-                senderName: window.AppState.currentUser.name,
-                chatId: chatId,
-                isGroup: isGroup,
-                type: 'sticker',
+            saveDB(db);
+            input.value = '';
+            renderApp();
+            setTimeout(() => {
+                const container = document.getElementById('messages-container');
+                if (container) container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
+
+        function sendSticker(stickerUrl) {
+            if (!activeChatId) return;
+            let db = loadDB();
+            if (!db.messages[activeChatId]) db.messages[activeChatId] = [];
+
+            db.messages[activeChatId].push({
+                id: 'msg_' + Math.random().toString(36).substring(2, 9),
+                senderId: currentUser.id,
                 stickerUrl: stickerUrl,
                 timestamp: Date.now()
             });
-            window.AppState.isStickersOpen = false;
-            window.renderApp();
-        };
 
-        window.handleCreateGroupSubmit = async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('group-name-input').value.trim();
-            const isChannel = document.getElementById('group-type-channel').checked;
-            const newGroupId = 'g_' + Math.random().toString(36).substr(2, 7);
-            
-            await setDoc(publicDoc('groups', newGroupId), {
-                id: newGroupId,
-                name,
-                isChannel,
-                adminId: window.AppState.currentUser.id,
-                members: [window.AppState.currentUser.id]
-            });
-            
-            window.closeModal();
-            window.AppState.activeTab = 'chats';
-            window.showNotification(isChannel ? 'Канал создан' : 'Группа создана');
-            window.renderApp();
-        };
+            saveDB(db);
+            toggleStickerPicker({ stopPropagation: () => {} });
+            renderApp();
+            setTimeout(() => {
+                const container = document.getElementById('messages-container');
+                if (container) container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
 
-        window.joinGroup = async (groupId) => {
-            const group = window.AppState.groups.find(g => g.id === groupId);
-            if (!group) return;
-            const updatedGroup = { ...group };
-            updatedGroup.members.push(window.AppState.currentUser.id);
-            await setDoc(publicDoc('groups', groupId), updatedGroup);
-            window.showNotification('Вы присоединились!');
-        };
+        function toggleStickerPicker(e) {
+            e.stopPropagation();
+            const picker = document.getElementById('sticker-picker');
+            if (picker) picker.classList.toggle('hidden');
+        }
 
-        window.handleCreateSticker = async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('sticker-name').value.trim();
-            const url = document.getElementById('sticker-url').value.trim();
-            const newStickerId = 'st_' + Math.random().toString(36).substr(2, 7);
-            
-            await setDoc(publicDoc('stickers', newStickerId), { id: newStickerId, name, url });
-            window.showNotification('Стикер добавлен для всех пользователей!');
-            window.closeModal();
-        };
-
-        window.switchTab = (tab) => { 
-            window.AppState.activeTab = tab; 
-            window.AppState.isPencilMenuOpen = false;
-            window.renderApp(); 
-        };
-        
-        window.openChat = (id) => { 
-            window.AppState.activeChatId = id; 
-            window.AppState.activeTab = 'chats'; 
-            window.renderApp(); 
-            window.scrollToBottom(); 
-        };
-
-        window.toggleTheme = async () => {
-            const user = window.AppState.currentUser;
-            user.darkMode = !user.darkMode;
-            await window.DB.updateUser(user);
-        };
-
-        window.copyToClipboard = (text) => {
-            navigator.clipboard.writeText(text).then(() => window.showNotification('Скопировано в буфер обмена'));
-        };
-
-        window.openModal = (htmlContent) => {
-            window.AppState.isPencilMenuOpen = false;
-            document.getElementById('modal-root').innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity">
-                    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border border-slate-200 dark:border-slate-800">
-                        ${htmlContent}
+        function showModal(title, contentHtml) {
+            const modalRoot = document.getElementById('modal-root');
+            modalRoot.innerHTML = `
+                <div class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                            <h3 class="font-bold text-slate-200">${escapeHtml(title)}</h3>
+                            <button onclick="closeModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="p-6">${contentHtml}</div>
                     </div>
                 </div>
             `;
-        };
+        }
 
-        window.closeModal = () => {
+        function closeModal() {
             document.getElementById('modal-root').innerHTML = '';
-        };
+        }
 
-        window.startCall = (type, name) => {
-            window.AppState.callState = { active: true, type, name };
-            window.renderApp();
-        };
+        function openAddFriendModal() {
+            const shareableLink = window.location.origin + window.location.pathname + '#user=' + currentUser.id;
+            showModal('Add Friend', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Connect by 10-Digit Xena ID</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="friend-id-input" placeholder="e.g. 0000000002" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <button onclick="connectFriendById()" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition">Connect</button>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-800 pt-4">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Your Shareable Xena Link / ID</label>
+                        <div class="flex space-x-2">
+                            <input type="text" readonly value="${shareableLink}" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-indigo-400 font-mono focus:outline-none">
+                            <button onclick="copyShareableLink('${shareableLink}')" class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
 
-        window.endCall = () => {
-            window.AppState.callState = null;
-            window.renderApp();
-        };
+        function connectFriendById() {
+            const input = document.getElementById('friend-id-input');
+            if (!input) return;
+            const friendId = input.value.trim();
+            let db = loadDB();
 
-        window.renderApp = () => {
-            const app = document.getElementById('app');
-            const currentUser = window.AppState.currentUser;
-            
-            if (!currentUser) {
-                app.innerHTML = window.renderAuthScreen();
+            if (!db.users[friendId]) {
+                alertUser('User with ID ' + friendId + ' not found in local network.');
+                return;
+            }
+            if (friendId === currentUser.id) {
+                alertUser('You cannot add yourself as a friend.');
                 return;
             }
 
-            // Управление темой
-            if (currentUser.darkMode) document.documentElement.classList.add('dark');
-            else document.documentElement.classList.remove('dark');
+            closeModal();
+            startDirectChat(friendId);
+        }
 
-            app.innerHTML = `
-                <div class="flex h-full w-full overflow-hidden relative">
-                    <!-- Сайдбар -->
-                    <aside class="w-20 md:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20 transition-all">
-                        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 relative">
-                            <div class="flex items-center gap-3 overflow-hidden">
-                                <div class="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center text-white shrink-0 font-bold shadow-md shadow-brand-500/20">
-                                    ${currentUser.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div class="hidden md:block truncate">
-                                    <h2 class="font-semibold text-sm truncate">${window.escapeHtml(currentUser.name)}</h2>
-                                    <p class="text-[11px] text-slate-500 font-mono truncate">ID: ${currentUser.id}</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Кнопка КАРАНДАШ (Меню действий) -->
-                            <div class="relative">
-                                <button onclick="window.AppState.isPencilMenuOpen = !window.AppState.isPencilMenuOpen; window.renderApp();" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-brand-500 hover:text-white transition">
-                                    <i class="fa-solid fa-pen text-xs"></i>
-                                </button>
-                                ${window.AppState.isPencilMenuOpen ? `
-                                    <div class="absolute right-0 top-10 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50">
-                                        <button onclick="window.renderAddFriendModal()" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><i class="fa-solid fa-user-plus text-brand-500 w-4"></i> Добавить друга</button>
-                                        <button onclick="window.renderCreateGroupModal()" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><i class="fa-solid fa-users text-purple-500 w-4"></i> Создать группу/канал</button>
-                                        <button onclick="window.renderCreateStickerModal()" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><i class="fa-solid fa-face-smile text-yellow-500 w-4"></i> Создать стикер</button>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                        
-                        <nav class="p-3 space-y-1 flex-1 overflow-y-auto hide-scroll">
-                            ${window.renderNavButton('chats', 'Чаты', 'fa-comments')}
-                            ${window.renderNavButton('groups', 'Группы и Каналы', 'fa-network-wired')}
-                            ${window.renderNavButton('requests', 'Заявки в друзья', 'fa-bell', currentUser.friendRequests?.length)}
-                            ${window.renderNavButton('profile', 'Профиль и Настройки', 'fa-gear')}
-                        </nav>
-                        
-                        <div class="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                            <button onclick="toggleTheme()" class="w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                                <i class="fa-solid ${currentUser.darkMode ? 'fa-sun' : 'fa-moon'}"></i>
-                            </button>
-                            <button onclick="handleLogout()" class="w-10 h-10 flex items-center justify-center rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                            </button>
-                        </div>
-                    </aside>
+        function copyShareableLink(link) {
+            document.execCommand('copy');
+            alertUser('Link copied to clipboard!');
+        }
 
-                    <!-- Основная область -->
-                    <main class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 relative">
-                        ${window.renderMainContent()}
-                        ${window.AppState.callState ? window.renderCallScreen() : ''}
-                    </main>
-                </div>
-            `;
-        };
+        function openCreateGroupModal() {
+            let db = loadDB();
+            const allUsers = Object.values(db.users).filter(u => u.id !== currentUser.id);
 
-        window.renderNavButton = (id, label, icon, badgeCount) => {
-            const isActive = window.AppState.activeTab === id;
-            return `
-                <button onclick="switchTab('${id}')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition relative ${isActive ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                    <i class="fa-solid ${icon} text-lg w-6 text-center"></i>
-                    <span class="hidden md:inline">${label}</span>
-                    ${badgeCount ? `<span class="absolute right-3 top-3 md:static bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm shadow-red-500/50">${badgeCount}</span>` : ''}
-                </button>
-            `;
-        };
-
-        window.renderMainContent = () => {
-            const tab = window.AppState.activeTab;
-            if (tab === 'requests') return window.renderRequestsTab();
-            if (tab === 'groups') return window.renderGroupsTab();
-            if (tab === 'profile') return window.renderProfileTab();
-            return window.renderChatsTab();
-        };
-
-        window.renderAuthScreen = () => {
-            const mode = window.AppState.authMode;
-            return `
-                <div class="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-                    <div class="w-full max-w-md glass-panel rounded-[2rem] shadow-2xl p-8">
-                        <div class="text-center mb-8">
-                            <div class="w-20 h-20 bg-gradient-to-tr from-brand-600 to-brand-400 rounded-3xl mx-auto flex items-center justify-center text-white text-4xl mb-6 shadow-lg shadow-brand-500/30 transform -rotate-6 hover:rotate-0 transition duration-300">
-                                <i class="fa-solid fa-bolt"></i>
-                            </div>
-                            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 mb-2">Xena</h1>
-                            <p class="text-sm text-slate-500">Мессенджер без границ</p>
-                        </div>
-                        <div class="flex bg-slate-100/50 dark:bg-slate-800/50 p-1.5 rounded-2xl mb-8 backdrop-blur-sm">
-                            <button onclick="setAuthMode('login')" class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${mode === 'login' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}">Вход</button>
-                            <button onclick="setAuthMode('register')" class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${mode === 'register' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}">Регистрация</button>
-                        </div>
-                        <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
-                            ${mode === 'register' ? `<input type="text" id="auth-name" required placeholder="Ваше имя" class="w-full px-5 py-4 rounded-2xl border-none bg-slate-100 dark:bg-slate-800/80 text-sm focus:ring-2 focus:ring-brand-500 transition shadow-inner">` : ''}
-                            <input type="text" id="auth-email" required placeholder="${mode === 'login' ? 'Email или ID (10 цифр)' : 'Email'}" class="w-full px-5 py-4 rounded-2xl border-none bg-slate-100 dark:bg-slate-800/80 text-sm focus:ring-2 focus:ring-brand-500 transition shadow-inner">
-                            <input type="password" id="auth-password" required placeholder="Пароль" class="w-full px-5 py-4 rounded-2xl border-none bg-slate-100 dark:bg-slate-800/80 text-sm focus:ring-2 focus:ring-brand-500 transition shadow-inner">
-                            <button type="submit" class="w-full py-4 mt-2 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0">${mode === 'login' ? 'Войти в аккаунт' : 'Создать ID'}</button>
-                        </form>
+            showModal('Create Group Chat', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Group Name</label>
+                        <input type="text" id="group-name-input" placeholder="e.g. Project Xena" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
                     </div>
-                </div>
-            `;
-        };
-
-        window.renderChatsTab = () => {
-            const { activeChatId, groups, users, currentUser } = window.AppState;
-            const myGroups = groups.filter(g => g.members && g.members.includes(currentUser.id));
-            const friendsIds = currentUser.friends || [];
-
-            return `
-                <div class="flex h-full w-full">
-                    <div class="${activeChatId ? 'hidden md:flex' : 'flex'} w-full md:w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 shrink-0">
-                        <div class="p-5 border-b border-slate-200 dark:border-slate-800">
-                            <h2 class="font-bold text-xl">Диалоги</h2>
-                        </div>
-                        <div class="flex-1 overflow-y-auto hide-scroll divide-y divide-slate-100 dark:divide-slate-800/50">
-                            ${myGroups.map(g => `
-                                <div onclick="openChat('${g.id}')" class="flex items-center space-x-4 p-4 cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition ${activeChatId === g.id ? 'bg-white dark:bg-slate-800 shadow-sm' : ''}">
-                                    <div class="w-14 h-14 rounded-2xl ${g.isChannel ? 'bg-blue-500' : 'bg-purple-500'} flex items-center justify-center text-white shrink-0 shadow-sm">
-                                        <i class="fa-solid ${g.isChannel ? 'fa-bullhorn' : 'fa-users'} text-lg"></i>
-                                    </div>
-                                    <div class="flex-1 truncate">
-                                        <h3 class="font-bold text-sm truncate">${window.escapeHtml(g.name)}</h3>
-                                        <p class="text-xs text-slate-500 mt-0.5">${g.isChannel ? 'Канал' : 'Группа'}</p>
-                                    </div>
-                                </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Select Members</label>
+                        <div class="max-h-48 overflow-y-auto space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            ${allUsers.map(u => `
+                                <label class="flex items-center space-x-3 p-2 rounded-lg hover:bg-slate-900 cursor-pointer">
+                                    <input type="checkbox" value="${u.id}" class="group-member-checkbox rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                                    <img src="${u.avatar}" class="w-8 h-8 rounded-full object-cover">
+                                    <span class="text-sm text-slate-200">${escapeHtml(u.name)}</span>
+                                </label>
                             `).join('')}
-                            ${friendsIds.map(fId => {
-                                const friend = users.find(u => u.id === fId);
-                                if (!friend) return '';
-                                return `
-                                <div onclick="openChat('${friend.id}')" class="flex items-center space-x-4 p-4 cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition ${activeChatId === friend.id ? 'bg-white dark:bg-slate-800 shadow-sm' : ''}">
-                                    <div class="w-14 h-14 rounded-2xl bg-brand-500 flex items-center justify-center text-white shrink-0 shadow-sm font-bold text-lg">
-                                        ${friend.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div class="flex-1 truncate">
-                                        <h3 class="font-bold text-sm truncate">${window.escapeHtml(friend.name)}</h3>
-                                        <p class="text-[11px] text-slate-400 font-mono mt-0.5">${friend.id}</p>
-                                    </div>
-                                </div>`;
-                            }).join('')}
-                            ${friendsIds.length === 0 && myGroups.length === 0 ? `
-                                <div class="p-8 text-center text-slate-400">
-                                    <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i class="fa-solid fa-ghost text-2xl"></i>
-                                    </div>
-                                    <p class="text-sm">Тут пока пусто.<br>Добавьте друзей через меню карандаша!</p>
-                                </div>
-                            ` : ''}
                         </div>
                     </div>
-                    <div class="${!activeChatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full bg-slate-50 dark:bg-slate-950 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] dark:bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-5">
-                        ${activeChatId ? window.renderActiveChat(currentUser, activeChatId) : `
-                            <div class="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50">
-                                <div class="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-                                    <i class="fa-solid fa-comments text-4xl"></i>
+                    <button onclick="submitCreateGroup()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition">Create Group</button>
+                </div>
+            `);
+        }
+
+        function submitCreateGroup() {
+            const nameInput = document.getElementById('group-name-input');
+            if (!nameInput || !nameInput.value.trim()) return;
+
+            const checkboxes = document.querySelectorAll('.group-member-checkbox:checked');
+            const members = [currentUser.id];
+            checkboxes.forEach(cb => members.push(cb.value));
+
+            let db = loadDB();
+            const chatId = 'group_' + Math.random().toString(36).substring(2, 9);
+            db.chats[chatId] = {
+                id: chatId,
+                type: 'group',
+                name: nameInput.value.trim(),
+                avatar: `https://placehold.co/150/f59e0b/ffffff?text=${nameInput.value.trim()[0].toUpperCase()}`,
+                members: members,
+                adminId: currentUser.id
+            };
+
+            saveDB(db);
+            closeModal();
+            selectChat(chatId);
+        }
+
+        function openCreateChannelModal() {
+            showModal('Create Public Channel', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Channel Name</label>
+                        <input type="text" id="channel-name-input" placeholder="e.g. Xena Announcements" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Description</label>
+                        <textarea id="channel-desc-input" placeholder="What is this channel about?" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 h-24 resize-none"></textarea>
+                    </div>
+                    <button onclick="submitCreateChannel()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition">Create Channel</button>
+                </div>
+            `);
+        }
+
+        function submitCreateChannel() {
+            const nameInput = document.getElementById('channel-name-input');
+            if (!nameInput || !nameInput.value.trim()) return;
+
+            let db = loadDB();
+            // All current users automatically join channels as subscribers
+            const members = Object.keys(db.users);
+            const chatId = 'channel_' + Math.random().toString(36).substring(2, 9);
+
+            db.chats[chatId] = {
+                id: chatId,
+                type: 'channel',
+                name: nameInput.value.trim(),
+                avatar: `https://placehold.co/150/10b981/ffffff?text=${nameInput.value.trim()[0].toUpperCase()}`,
+                members: members,
+                adminId: currentUser.id
+            };
+
+            saveDB(db);
+            closeModal();
+            selectChat(chatId);
+        }
+
+        function openStickerCreatorModal() {
+            showModal('Global Sticker Creator', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Sticker Name</label>
+                        <input type="text" id="sticker-name-input" placeholder="e.g. Cool Cat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Emoji or Icon Text</label>
+                        <input type="text" id="sticker-emoji-input" placeholder="🚀" maxlength="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 text-center text-2xl">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Background Color</label>
+                        <select id="sticker-color-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <option value="6366f1">Indigo</option>
+                            <option value="f43f5e">Rose</option>
+                            <option value="10b981">Emerald</option>
+                            <option value="f59e0b">Amber</option>
+                            <option value="8b5cf6">Purple</option>
+                        </select>
+                    </div>
+                    <button onclick="submitCreateSticker()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition">Publish Sticker</button>
+                </div>
+            `);
+        }
+
+        function submitCreateSticker() {
+            const name = document.getElementById('sticker-name-input').value.trim();
+            const emoji = document.getElementById('sticker-emoji-input').value.trim() || '⭐';
+            const color = document.getElementById('sticker-color-input').value;
+
+            if (!name) return;
+
+            let db = loadDB();
+            const stickerUrl = `https://placehold.co/120/${color}/ffffff?text=${encodeURIComponent(emoji)}`;
+            db.stickers.push({
+                id: 'stk_' + Math.random().toString(36).substring(2, 9),
+                name: name,
+                url: stickerUrl
+            });
+
+            saveDB(db);
+            closeModal();
+            alertUser('Sticker created and published globally!');
+        }
+
+        function openProfileModal() {
+            showModal('My Profile', `
+                <div class="space-y-4 text-center">
+                    <img src="${currentUser.avatar}" class="w-24 h-24 rounded-full object-cover mx-auto border-4 border-indigo-500" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=X'">
+                    <div>
+                        <h4 class="text-lg font-bold text-slate-200">${escapeHtml(currentUser.name)}</h4>
+                        <p class="text-xs text-indigo-400 font-mono mt-1">Xena ID: ${currentUser.id}</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1 text-left">Display Name</label>
+                        <input type="text" id="profile-name-edit" value="${escapeHtml(currentUser.name)}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <button onclick="saveProfile()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition">Save Changes</button>
+                </div>
+            `);
+        }
+
+        function saveProfile() {
+            const nameInput = document.getElementById('profile-name-edit');
+            if (!nameInput || !nameInput.value.trim()) return;
+
+            let db = loadDB();
+            db.users[currentUser.id].name = nameInput.value.trim();
+            saveDB(db);
+            closeModal();
+            refreshAppState();
+        }
+
+        function openSwitchAccountModal() {
+            let db = loadDB();
+            const users = Object.values(db.users);
+
+            showModal('Switch or Create Account', `
+                <div class="space-y-4">
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        ${users.map(u => `
+                            <div onclick="switchUser('${u.id}'); closeModal();" class="flex items-center justify-between p-3 rounded-xl bg-slate-950 hover:bg-slate-800 cursor-pointer border ${u.id === currentUser.id ? 'border-indigo-500' : 'border-slate-800'} transition">
+                                <div class="flex items-center space-x-3">
+                                    <img src="${u.avatar}" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <div class="text-sm font-medium text-slate-200">${escapeHtml(u.name)}</div>
+                                        <div class="text-xs text-indigo-400 font-mono">ID: ${u.id}</div>
+                                    </div>
                                 </div>
-                                <p class="font-medium">Выберите диалог для общения</p>
+                                ${u.id === currentUser.id ? '<span class="text-xs text-indigo-400 font-semibold">Active</span>' : ''}
                             </div>
-                        `}
+                        `).join('')}
+                    </div>
+                    <div class="border-t border-slate-800 pt-4">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Create New Account</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="new-acc-name" placeholder="Your Name" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <button onclick="submitNewAccount()" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition">Create</button>
+                        </div>
                     </div>
                 </div>
-            `;
-        };
+            `);
+        }
 
-        window.renderActiveChat = (currentUser, chatId) => {
-            const isGroup = chatId.startsWith('g_');
-            let chatEntity = null;
-            let chatName = 'Чат';
-            let chatIconHtml = '';
+        function submitNewAccount() {
+            const name = document.getElementById('new-acc-name').value.trim();
+            closeModal();
+            createNewAccount(name);
+        }
 
-            if (isGroup) {
-                chatEntity = window.AppState.groups.find(x => x.id === chatId);
-                if (chatEntity) {
-                    chatName = chatEntity.name;
-                    chatIconHtml = `<div class="w-10 h-10 rounded-xl ${chatEntity.isChannel ? 'bg-blue-500' : 'bg-purple-500'} text-white flex items-center justify-center"><i class="fa-solid ${chatEntity.isChannel ? 'fa-bullhorn' : 'fa-users'}"></i></div>`;
+        function openChatInfoModal(chatId) {
+            let db = loadDB();
+            const chat = db.chats[chatId];
+            if (!chat) return;
+
+            showModal('Chat Information', `
+                <div class="space-y-4 text-center">
+                    <img src="${chat.avatar}" class="w-20 h-20 rounded-full object-cover mx-auto border-2 border-indigo-500">
+                    <div>
+                        <h4 class="text-lg font-bold text-slate-200">${escapeHtml(chat.name)}</h4>
+                        <p class="text-xs text-slate-400 uppercase tracking-wider mt-1">${chat.type} chat</p>
+                    </div>
+                    <div class="text-left">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Members (${chat.members.length})</label>
+                        <div class="max-h-36 overflow-y-auto space-y-1 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                            ${chat.members.map(mId => {
+                                const mUser = db.users[mId];
+                                return mUser ? `<div class="text-xs text-slate-300 py-1 px-2 flex items-center justify-between"><span>${escapeHtml(mUser.name)}</span><span class="text-indigo-400 font-mono">${mUser.id}</span></div>` : '';
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        function startCall(peerId, type) {
+            let db = loadDB();
+            const peer = db.users[peerId];
+            if (!peer) return;
+
+            callActive = true;
+            callPeer = peer;
+            callType = type;
+            callTimer = 0;
+            renderApp();
+
+            callInterval = setInterval(() => {
+                callTimer++;
+                const timerEl = document.getElementById('call-timer');
+                if (timerEl) {
+                    const mins = Math.floor(callTimer / 60).toString().padStart(2, '0');
+                    const secs = (callTimer % 60).toString().padStart(2, '0');
+                    timerEl.innerText = `${mins}:${secs}`;
                 }
-            } else {
-                chatEntity = window.AppState.users.find(x => x.id === chatId);
-                if (chatEntity) {
-                    chatName = chatEntity.name;
-                    chatIconHtml = `<div class="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold">${chatEntity.name.charAt(0)}</div>`;
-                }
-            }
+            }, 1000);
+        }
 
-            const isChannel = isGroup && chatEntity?.isChannel;
-            const isAdmin = isGroup && chatEntity?.adminId === currentUser.id;
-            const canSend = !isChannel || isAdmin; // В каналах пишут только админы
+        function endCall() {
+            callActive = false;
+            callPeer = null;
+            if (callInterval) clearInterval(callInterval);
+            renderApp();
+        }
 
-            const messages = window.AppState.messages.filter(m => {
-                if (isGroup) return m.chatId === chatId;
-                return !m.isGroup && ((m.senderId === currentUser.id && m.chatId === chatId) || (m.senderId === chatId && m.chatId === currentUser.id));
-            }).sort((a,b) => a.timestamp - b.timestamp);
-
+        function renderCallOverlay() {
             return `
-                <div class="flex flex-col h-full relative glass-panel">
-                    <!-- Хедер чата -->
-                    <div class="p-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between z-10">
-                        <div class="flex items-center gap-4">
-                            <button onclick="window.AppState.activeChatId=null; window.renderApp();" class="md:hidden text-slate-500 hover:text-brand-500"><i class="fa-solid fa-arrow-left text-xl"></i></button>
-                            ${chatIconHtml}
-                            <div>
-                                <h3 class="font-bold text-sm">${window.escapeHtml(chatName)}</h3>
-                                ${isGroup ? `<p class="text-xs text-slate-500">${isChannel ? 'Канал' : 'Группа'} • Участников: ${chatEntity.members.length}</p>` : ''}
-                            </div>
-                        </div>
-                        
-                        ${!isGroup ? `
-                            <div class="flex gap-2">
-                                <button onclick="startCall('audio', '${window.escapeHtml(chatName)}')" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 transition flex items-center justify-center"><i class="fa-solid fa-phone"></i></button>
-                                <button onclick="startCall('video', '${window.escapeHtml(chatName)}')" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-brand-100 hover:text-brand-600 transition flex items-center justify-center"><i class="fa-solid fa-video"></i></button>
-                            </div>
-                        ` : ''}
+                <div class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-between p-12 z-50 animate-fade-in">
+                    <div class="text-center space-y-2 mt-8">
+                        <span class="text-xs uppercase tracking-widest text-indigo-400 font-semibold">Xena Secure ${callType === 'video' ? 'Video' : 'Voice'} Call</span>
+                        <h2 class="text-2xl font-bold text-slate-100">${escapeHtml(callPeer ? callPeer.name : 'Unknown')}</h2>
+                        <p id="call-timer" class="text-sm font-mono text-slate-400">00:00</p>
                     </div>
 
-                    <!-- Контейнер сообщений -->
-                    <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4">
-                        ${messages.length === 0 ? `<div class="text-center text-slate-400 mt-10 text-sm bg-white/50 dark:bg-slate-800/50 py-2 px-4 rounded-full inline-block mx-auto">Здесь пока нет сообщений.</div>` : ''}
-                        ${messages.map(msg => {
-                            const isMe = msg.senderId === currentUser.id;
-                            return `
-                                <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                                    <div class="max-w-[85%] md:max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
-                                        ${isGroup && !isMe ? `<span class="text-[10px] font-bold text-slate-500 ml-2 mb-1">${window.escapeHtml(msg.senderName)}</span>` : ''}
-                                        <div class="px-5 py-3 shadow-sm ${isMe ? 'bg-brand-500 text-white rounded-3xl rounded-br-sm' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl rounded-bl-sm'}">
-                                            ${msg.type === 'sticker' ? `
-                                                <img src="${window.escapeHtml(msg.stickerUrl)}" class="w-32 h-32 object-contain drop-shadow-md">
-                                            ` : `
-                                                <p class="text-[15px] break-words leading-relaxed">${window.escapeHtml(msg.text)}</p>
-                                            `}
-                                        </div>
-                                        <span class="text-[10px] text-slate-400 mt-1 mx-2">${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
+                    <div class="relative flex items-center justify-center my-auto">
+                        <div class="absolute w-48 h-48 rounded-full bg-indigo-600/20 pulse-ring"></div>
+                        <img src="${callPeer ? callPeer.avatar : 'https://placehold.co/150/6366f1/ffffff?text=U'}" class="w-32 h-32 rounded-full object-cover border-4 border-indigo-500 shadow-2xl relative z-10" onerror="this.src='https://placehold.co/150/6366f1/ffffff?text=U'">
                     </div>
 
-                    <!-- Панель стикеров -->
-                    ${window.AppState.isStickersOpen && canSend ? `
-                        <div class="absolute bottom-24 left-4 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-3xl p-4 shadow-2xl z-20">
-                            <div class="flex justify-between items-center mb-3">
-                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Глобальные стикеры</span>
-                                <button onclick="window.renderCreateStickerModal()" class="text-xs text-brand-500 hover:underline">Добавить свой</button>
-                            </div>
-                            <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto hide-scroll p-1">
-                                ${window.AppState.stickers.map(st => `
-                                    <button onclick="sendStickerMessage('${chatId}', ${isGroup}, '${window.escapeHtml(st.url)}')" class="aspect-square p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition transform hover:scale-110">
-                                        <img src="${window.escapeHtml(st.url)}" class="w-full h-full object-contain" alt="${window.escapeHtml(st.name)}">
-                                    </button>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <!-- Инпут -->
-                    ${canSend ? `
-                        <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200/50 dark:border-slate-800/50 flex gap-3 items-end">
-                            <button type="button" onclick="window.AppState.isStickersOpen=!window.AppState.isStickersOpen; window.renderApp();" class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-brand-500 transition flex items-center justify-center shrink-0">
-                                <i class="fa-solid fa-face-smile text-xl"></i>
-                            </button>
-                            <div class="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center overflow-hidden border border-transparent focus-within:border-brand-500/50 transition">
-                                <input type="text" id="chat-input" placeholder="Написать сообщение..." autocomplete="off" class="w-full bg-transparent px-5 py-3.5 text-[15px] focus:outline-none">
-                            </div>
-                            <button type="submit" class="w-12 h-12 bg-brand-500 text-white rounded-full hover:bg-brand-600 transition shadow-lg shadow-brand-500/30 flex items-center justify-center shrink-0">
-                                <i class="fa-solid fa-paper-plane mr-0.5"></i>
-                            </button>
-                        </form>
-                    ` : `
-                        <div class="p-4 bg-slate-100 dark:bg-slate-900 text-center text-sm text-slate-500 border-t border-slate-200 dark:border-slate-800">
-                            Только администраторы могут писать в этот канал.
-                        </div>
-                    `}
-                </div>
-            `;
-        };
-
-        window.renderAddFriendModal = () => {
-            window.openModal(`
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-xl">Добавить друга</h3>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-                    </div>
-                    <div class="space-y-4">
-                        <input type="text" id="search-id-input" placeholder="Введите 10-значный ID" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500">
-                        <button onclick="autoSendFriendRequest(document.getElementById('search-id-input').value)" class="w-full py-3 bg-brand-500 text-white font-bold rounded-2xl">Отправить заявку</button>
-                    </div>
-                </div>
-            `);
-        };
-
-        window.renderCreateGroupModal = () => {
-            window.openModal(`
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-xl">Новая группа / канал</h3>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-                    </div>
-                    <form onsubmit="handleCreateGroupSubmit(event)" class="space-y-5">
-                        <input type="text" id="group-name-input" required placeholder="Название" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500">
-                        <div class="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-                            <input type="checkbox" id="group-type-channel" class="w-5 h-5 text-brand-500 rounded focus:ring-brand-500">
-                            <label for="group-type-channel" class="text-sm font-medium cursor-pointer">Это канал (пишет только админ)</label>
-                        </div>
-                        <button type="submit" class="w-full py-3 bg-brand-500 text-white font-bold rounded-2xl">Создать</button>
-                    </form>
-                </div>
-            `);
-        };
-
-        window.renderCreateStickerModal = () => {
-            window.openModal(`
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-xl">Создать стикер</h3>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-                    </div>
-                    <form onsubmit="handleCreateSticker(event)" class="space-y-4">
-                        <div class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs p-3 rounded-xl mb-4">
-                            Стикер будет доступен <b>всем</b> пользователям мессенджера.
-                        </div>
-                        <input type="text" id="sticker-name" required placeholder="Название (например: Кот)" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500">
-                        <input type="url" id="sticker-url" required placeholder="URL прозрачной картинки (PNG/GIF)" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500">
-                        <button type="submit" class="w-full py-3 bg-brand-500 text-white font-bold rounded-2xl">Опубликовать в общую базу</button>
-                    </form>
-                </div>
-            `);
-        };
-
-        window.renderCallScreen = () => {
-            const state = window.AppState.callState;
-            return `
-                <div class="absolute inset-0 bg-slate-900/95 backdrop-blur-xl z-50 flex flex-col items-center justify-between py-20">
-                    <div class="text-center space-y-6">
-                        <div class="w-32 h-32 rounded-full bg-slate-800 flex items-center justify-center mx-auto shadow-2xl relative">
-                            <div class="absolute inset-0 rounded-full border-4 border-brand-500 opacity-50 animate-ping"></div>
-                            <i class="fa-solid ${state.type === 'video' ? 'fa-video' : 'fa-phone'} text-4xl text-white"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-3xl font-bold text-white mb-2">${window.escapeHtml(state.name)}</h2>
-                            <p class="text-slate-400">${state.type === 'video' ? 'Видеозвонок...' : 'Звонок...'}</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-6">
-                        <button class="w-16 h-16 rounded-full bg-slate-800 text-white flex items-center justify-center text-xl opacity-50 cursor-not-allowed"><i class="fa-solid fa-microphone-slash"></i></button>
-                        <button onclick="endCall()" class="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-3xl shadow-lg shadow-red-500/30 transition transform hover:scale-105"><i class="fa-solid fa-phone-slash"></i></button>
-                        <button class="w-16 h-16 rounded-full bg-slate-800 text-white flex items-center justify-center text-xl opacity-50 cursor-not-allowed"><i class="fa-solid fa-volume-high"></i></button>
+                    <div class="flex items-center space-x-6 mb-8">
+                        <button onclick="endCall()" class="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-xl shadow-lg shadow-rose-600/30 transition transform hover:scale-105">
+                            <i class="fa-solid fa-phone-slash"></i>
+                        </button>
                     </div>
                 </div>
             `;
+        }
+
+        // Utilities
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function alertUser(msg) {
+            showModal('Notice', `<p class="text-sm text-slate-300 mb-6">${escapeHtml(msg)}</p><button onclick="closeModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition">OK</button>`);
+        }
+
+        function handleSearch(query) {
+            // Future search filter or sidebar list filter
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            initApp();
         };
-
-        window.renderRequestsTab = () => {
-            const reqs = window.AppState.currentUser.friendRequests || [];
-            return `
-                <div class="p-6 md:p-10 h-full overflow-y-auto">
-                    <div class="max-w-2xl mx-auto">
-                        <h2 class="font-bold text-2xl mb-8 flex items-center gap-3">
-                            <i class="fa-solid fa-bell text-brand-500"></i> Входящие заявки
-                        </h2>
-                        <div class="space-y-4">
-                            ${reqs.map(id => {
-                                const sender = window.AppState.users.find(u => u.id === id);
-                                if(!sender) return '';
-                                return `
-                                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 flex items-center justify-between shadow-sm hover:shadow-md transition">
-                                    <div class="flex gap-4 items-center">
-                                        <div class="w-12 h-12 rounded-2xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-lg">${sender.name.charAt(0)}</div>
-                                        <div>
-                                            <h3 class="font-bold">${window.escapeHtml(sender.name)}</h3>
-                                            <p class="text-xs text-slate-500 font-mono mt-0.5">ID: ${sender.id}</p>
-                                        </div>
-                                    </div>
-                                    <button onclick="acceptFriendRequest('${sender.id}')" class="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-xl transition shadow-sm">Принять</button>
-                                </div>`;
-                            }).join('')}
-                            ${reqs.length === 0 ? `
-                                <div class="text-center py-20 text-slate-400">
-                                    <i class="fa-solid fa-box-open text-5xl mb-4 opacity-50"></i>
-                                    <p>Новых заявок пока нет.</p>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        window.renderGroupsTab = () => {
-            return `
-                <div class="p-6 md:p-10 h-full overflow-y-auto">
-                    <div class="max-w-4xl mx-auto">
-                        <div class="flex justify-between items-center mb-8">
-                            <h2 class="font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-compass text-brand-500"></i> Навигатор</h2>
-                            <button onclick="window.renderCreateGroupModal()" class="px-5 py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-brand-600 transition">Создать</button>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            ${window.AppState.groups.map(g => {
-                                const isMember = g.members.includes(window.AppState.currentUser.id);
-                                return `
-                                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
-                                    <div class="flex items-start gap-4 mb-4">
-                                        <div class="w-12 h-12 rounded-2xl ${g.isChannel ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'bg-purple-50 dark:bg-purple-900/30 text-purple-600'} flex items-center justify-center shrink-0">
-                                            <i class="fa-solid ${g.isChannel ? 'fa-bullhorn' : 'fa-users'} text-xl"></i>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <h3 class="font-bold text-base truncate">${window.escapeHtml(g.name)}</h3>
-                                            <p class="text-xs text-slate-500 mt-1">${g.isChannel ? 'Канал' : 'Группа'} • ${g.members.length} участн.</p>
-                                        </div>
-                                    </div>
-                                    <div class="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
-                                        ${isMember 
-                                            ? `<button onclick="openChat('${g.id}')" class="w-full py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-sm rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition">Перейти к чату</button>`
-                                            : `<button onclick="joinGroup('${g.id}')" class="w-full py-2.5 bg-brand-500 text-white font-semibold text-sm rounded-xl hover:bg-brand-600 transition shadow-sm">Вступить</button>`
-                                        }
-                                    </div>
-                                </div>`;
-                            }).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        window.renderProfileTab = () => {
-            const u = window.AppState.currentUser;
-            const inviteLink = window.location.origin + window.location.pathname + '?add=' + u.id;
-            
-            return `
-                <div class="p-6 md:p-10 h-full overflow-y-auto">
-                    <div class="max-w-2xl mx-auto space-y-8">
-                        <h2 class="font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-user-astronaut text-brand-500"></i> Ваш профиль</h2>
-                        
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-6 relative overflow-hidden">
-                            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-brand-400 to-brand-600 opacity-20"></div>
-                            
-                            <div class="w-24 h-24 rounded-3xl bg-brand-500 text-white text-4xl font-bold flex justify-center items-center shadow-xl z-10">
-                                ${u.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div class="text-center md:text-left z-10 flex-1">
-                                <h3 class="font-bold text-2xl mb-1">${window.escapeHtml(u.name)}</h3>
-                                <div class="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg mb-4">
-                                    <span class="text-xs text-slate-500">ID:</span>
-                                    <span class="text-sm font-mono font-bold text-brand-600 dark:text-brand-400">${u.id}</span>
-                                    <button onclick="copyToClipboard('${u.id}')" class="text-slate-400 hover:text-brand-500"><i class="fa-regular fa-copy"></i></button>
-                                </div>
-                                <p class="text-sm text-slate-600 dark:text-slate-400">«${window.escapeHtml(u.bio)}»</p>
-                            </div>
-                        </div>
-
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm">
-                            <h3 class="font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-link text-brand-500"></i> Ссылка на дружбу</h3>
-                            <p class="text-sm text-slate-500 mb-4">Отправьте эту ссылку друзьям. Перейдя по ней, они автоматически отправят вам заявку в друзья.</p>
-                            
-                            <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl border border-slate-200 dark:border-slate-700">
-                                <input type="text" readonly value="${inviteLink}" class="flex-1 bg-transparent px-3 text-sm text-slate-600 dark:text-slate-300 focus:outline-none truncate font-mono">
-                                <button onclick="copyToClipboard('${inviteLink}')" class="px-5 py-3 bg-brand-500 text-white font-semibold rounded-xl text-sm shadow-sm hover:bg-brand-600 transition">Копировать</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        // Запуск
-        initFirebase();
     </script>
+
 </body>
 </html>
