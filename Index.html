@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xena Messenger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        xena: {
+                            50: '#f9f5ff',
+                            100: '#f3e8ff',
+                            200: '#e9d5ff',
+                            300: '#d8b4fe',
+                            400: '#c084fc',
+                            500: '#a855f7',
+                            600: '#9333ea',
+                            700: '#7e22ce',
+                            800: '#6b21a8',
+                            900: '#581c87',
+                            lightBg: '#f4f0fa',
+                            sidebar: '#ffffff',
+                            chatBg: '#efe7fb',
+                            bubbleOut: '#e2ccff',
+                            bubbleIn: '#ffffff',
+                            accent: '#8b5cf6'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(168, 85, 247, 0.2);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(168, 85, 247, 0.4);
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .ring-pulse {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full bg-xena-lightBg text-slate-800 overflow-hidden flex flex-col">
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <div id="auth-screen" class="fixed inset-0 z-40 bg-gradient-to-br from-xena-100 via-xena-50 to-white flex items-center justify-center p-4">
+        <div class="bg-white/90 backdrop-blur-md border border-xena-200 w-full max-w-md p-8 rounded-3xl shadow-xl shadow-xena-500/10 transition-all duration-300">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-xena-600 to-xena-400 text-white rounded-2xl shadow-lg shadow-xena-500/30 mb-4 text-2xl font-bold tracking-wider">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Xena</h1>
+                <p class="text-sm text-slate-500 mt-1">Быстрый, легкий и защищенный мессенджер</p>
+            </div>
+
+            <div class="flex bg-xena-100 p-1 rounded-xl mb-6">
+                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all">Вход</button>
+                <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all">Регистрация</button>
+            </div>
+
+            <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
+                <div id="name-field-container" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Ваше Имя</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-user"></i></span>
+                        <input type="text" id="reg-name" placeholder="Александр Резник" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Имя пользователя или Email</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-at"></i></span>
+                        <input type="text" id="auth-username" required placeholder="alex_xena" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Пароль</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-lock"></i></span>
+                        <input type="password" id="auth-password" required placeholder="••••••••" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+
+                <button type="submit" id="auth-submit-btn" class="w-full mt-2 py-3 bg-xena-600 hover:bg-xena-700 text-white font-semibold rounded-xl shadow-md shadow-xena-600/30 transition-all">
+                    Войти в систему
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-screen" class="hidden flex-1 h-full flex overflow-hidden">
+        
+        <!-- Sidebar Navigation & Chats -->
+        <div id="sidebar" class="w-full md:w-80 lg:w-96 bg-white border-r border-xena-200 flex flex-col h-full z-10 transition-all">
+            
+            <!-- Sidebar Header -->
+            <div class="p-4 border-b border-xena-100 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="current-user-avatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-xena-500 to-xena-700 text-white flex items-center font-bold justify-center shadow-md">U</div>
+                    <div>
+                        <h2 id="current-user-name" class="font-bold text-sm text-slate-800">Пользователь</h2>
+                        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> В сети</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="toggleSettingsModal(true)" title="Настройки" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-xena-50 text-slate-600 transition-colors">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                    <button onclick="logout()" title="Выйти" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="p-3 border-b border-xena-100 bg-white">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+                    <input type="text" id="chat-search" oninput="filterChats(this.value)" placeholder="Поиск по контактам..." class="w-full pl-10 pr-4 py-2 bg-xena-50 border border-transparent rounded-xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- Chats List -->
+            <div id="chats-list" class="flex-1 overflow-y-auto custom-scrollbar divide-y divide-xena-50">
+                <!-- Dynamically populated via JS -->
+            </div>
+        </div>
+
+        <!-- Chat Workspace Area -->
+        <div id="chat-area" class="flex-1 flex flex-col h-full bg-xena-chatBg relative hidden md:flex">
+            
+            <!-- Empty State -->
+            <div id="chat-empty-state" class="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                <div class="w-20 h-20 rounded-3xl bg-white shadow-lg shadow-xena-500/5 flex items-center justify-center text-xena-400 text-3xl mb-4 border border-xena-100">
+                    <i class="fa-regular fa-comments"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-700">Выберите чат для общения</h3>
+                <p class="text-sm max-w-sm mt-1 text-slate-400">Обменивайтесь быстрыми сообщениями, файлами и совершайте качественные звонки в один клик.</p>
+            </div>
+
+            <!-- Active Chat View -->
+            <div id="active-chat-container" class="flex-1 flex flex-col h-full hidden">
+                
+                <!-- Chat Header -->
+                <div class="px-6 py-3 bg-white/90 backdrop-blur-md border-b border-xena-100 flex items-center justify-between shadow-sm z-10">
+                    <div class="flex items-center gap-3">
+                        <button onclick="backToSidebar()" class="md:hidden mr-1 text-slate-600 hover:text-xena-600"><i class="fa-solid fa-arrow-left text-lg"></i></button>
+                        <div class="relative">
+                            <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-xena-200 text-xena-800 font-bold flex items-center justify-center">А</div>
+                            <span id="active-chat-status-dot" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"></span>
+                        </div>
+                        <div>
+                            <h3 id="active-chat-name" class="font-bold text-sm text-slate-800">Имя контакта</h3>
+                            <p id="active-chat-status" class="text-xs text-slate-500">в сети</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-1 sm:gap-2">
+                        <button onclick="startCall('audio')" title="Аудиозвонок" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
+                            <i class="fa-solid fa-phone text-sm"></i>
+                        </button>
+                        <button onclick="startCall('video')" title="Видеозвонок" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
+                            <i class="fa-solid fa-video text-sm"></i>
+                        </button>
+                        <div class="h-6 w-px bg-xena-200 mx-1"></div>
+                        <button onclick="toggleChatDetails()" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-600 flex items-center justify-center transition-all">
+                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Stream -->
+                <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-gradient-to-b from-xena-chatBg/50 to-xena-chatBg">
+                    <!-- Dynamic Messages -->
+                </div>
+
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="px-6 py-2 text-xs text-slate-500 italic hidden">
+                    <span id="typing-name">Собеседник</span> печатает...
+                </div>
+
+                <!-- Chat Input Area -->
+                <div class="p-4 bg-white border-t border-xena-100">
+                    <form onsubmit="handleSendMessage(event)" class="flex items-center gap-2 relative">
+                        <!-- Emoji Picker Popover -->
+                        <div id="emoji-picker" class="absolute bottom-16 left-0 bg-white border border-xena-200 shadow-xl rounded-2xl p-3 grid grid-cols-6 gap-2 hidden z-30 w-64">
+                            <button type="button" onclick="insertEmoji('😊')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">😊</button>
+                            <button type="button" onclick="insertEmoji('👍')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">👍</button>
+                            <button type="button" onclick="insertEmoji('❤️')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">❤️</button>
+                            <button type="button" onclick="insertEmoji('🚀')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🚀</button>
+                            <button type="button" onclick="insertEmoji('🔥')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🔥</button>
+                            <button type="button" onclick="insertEmoji('🎉')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🎉</button>
+                            <button type="button" onclick="insertEmoji('✨')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">✨</button>
+                            <button type="button" onclick="insertEmoji('😎')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">😎</button>
+                            <button type="button" onclick="insertEmoji('🤝')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🤝</button>
+                            <button type="button" onclick="insertEmoji('💡')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">💡</button>
+                            <button type="button" onclick="insertEmoji('☕')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">☕</button>
+                            <button type="button" onclick="insertEmoji('🎯')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🎯</button>
+                        </div>
+
+                        <button type="button" onclick="toggleEmojiPicker()" title="Эмодзи" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-400 hover:text-xena-600 flex items-center justify-center transition-all">
+                            <i class="fa-regular fa-face-smile text-lg"></i>
+                        </button>
+                        <button type="button" onclick="triggerFileUpload()" title="Прикрепить файл" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-400 hover:text-xena-600 flex items-center justify-center transition-all">
+                            <i class="fa-solid fa-paperclip text-lg"></i>
+                        </button>
+                        <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(event)">
+                        
+                        <input type="text" id="message-input" autocomplete="off" placeholder="Написать сообщение..." class="flex-1 px-4 py-3 bg-xena-50 border border-transparent rounded-2xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
+                        
+                        <button type="submit" class="w-11 h-11 bg-xena-600 hover:bg-xena-700 text-white rounded-2xl flex items-center justify-center shadow-md shadow-xena-600/30 transition-all">
+                            <i class="fa-solid fa-paper-plane text-sm"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="call-modal" class="fixed inset-0 z-50 bg-slate-900/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden relative">
+            
+            <!-- Call Header info -->
+            <div class="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-700/50">
+                <div id="call-contact-avatar" class="w-8 h-8 rounded-full bg-xena-500 text-white flex items-center justify-center font-bold text-sm">C</div>
+                <div>
+                    <h4 id="call-contact-name" class="text-white text-sm font-semibold">Контакт</h4>
+                    <p id="call-status-timer" class="text-xs text-emerald-400 font-medium">Соединение...</p>
+                </div>
+            </div>
+
+            <!-- Video Streams Container -->
+            <div class="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+                <div id="remote-video-container" class="w-full h-full flex items-center justify-center">
+                    <video id="remote-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                    <div id="remote-video-placeholder" class="flex flex-col items-center justify-center text-slate-500">
+                        <div class="w-28 h-28 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-4xl text-xena-400 mb-4 ring-pulse">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <p class="text-white font-medium text-lg">Защищенный канал связи активен</p>
+                        <p class="text-xs text-slate-400 mt-1">WebRTC Peer-to-Peer аудио/видео поток</p>
+                    </div>
+                </div>
+
+                <!-- Local PiP Preview -->
+                <div id="local-video-container" class="absolute bottom-6 right-6 w-32 sm:w-48 aspect-video bg-slate-800 rounded-2xl border-2 border-slate-700/80 shadow-2xl overflow-hidden hidden">
+                    <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                </div>
+            </div>
+
+            <!-- Call Controls Bar -->
+            <div class="py-5 px-6 bg-slate-900/90 border-t border-slate-800 flex items-center justify-center gap-4 z-20">
+                <button onclick="toggleAudioMute()" id="mute-btn" title="Выключить микрофон" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-microphone text-base"></i>
+                </button>
+                <button onclick="toggleVideoMute()" id="video-btn" title="Включить/Выключить камеру" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-video text-base"></i>
+                </button>
+                <button onclick="endCall()" title="Завершить звонок" class="w-14 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-all">
+                    <i class="fa-solid fa-phone-slash text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-xena-100 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900">Настройки аккаунта</h3>
+                <button onclick="toggleSettingsModal(false)" class="w-8 h-8 rounded-lg hover:bg-xena-50 text-slate-500 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Имя профиля</label>
+                    <input type="text" id="settings-name" class="w-full px-4 py-2.5 bg-xena-50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Статус / О себе</label>
+                    <input type="text" id="settings-bio" value="В сети Xena Messenger" class="w-full px-4 py-2.5 bg-xena-50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500">
+                </div>
+                <div class="pt-4 flex justify-end gap-2">
+                    <button onclick="toggleSettingsModal(false)" class="px-4 py-2 bg-xena-100 text-slate-700 font-semibold rounded-xl text-sm hover:bg-xena-200 transition-all">Отмена</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-xena-600 text-white font-semibold rounded-xl text-sm hover:bg-xena-700 transition-all shadow-md shadow-xena-500/20">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let activeTab = 'login';
+        let activeChatId = null;
+        let localStream = null;
+        let callTimerInterval = null;
+        let callSeconds = 0;
+        let isAudioMuted = false;
+        let isVideoMuted = false;
+
+        const initialContacts = [
+            { id: 'c1', name: 'София Стерлинг', avatar: 'СС', online: true, bio: 'UI/UX дизайнер в Xena', lastSeen: 'в сети' },
+            { id: 'c2', name: 'Маркус Ванс', avatar: 'МВ', online: true, bio: 'Создаем будущее вместе', lastSeen: 'в сети' },
+            { id: 'c3', name: 'Елена Ростова', avatar: 'ЕР', online: false, lastSeen: '2 часа назад', bio: 'Кофе и код ☕' },
+            { id: 'c4', name: 'Xena Assistant', avatar: 'XA', online: true, verified: true, bio: 'Официальный бот поддержки', lastSeen: 'в сети' }
+        ];
+
+        let chatsData = {
+            'c1': {
+                messages: [
+                    { id: mId(), sender: 'c1', text: 'Привет! Тестировала новые звонки в Xena — звук просто супер! 😊', time: '10:42', type: 'text' },
+                    { id: mId(), sender: 'me', text: 'Привет, София! Да, качество WebRTC впечатляет, и интерфейс очень стильный.', time: '10:44', type: 'text' },
+                    { id: mId(), sender: 'c1', text: 'Отлично! Созвонимся позже по видеосвязи 🚀', time: '10:45', type: 'text' }
+                ]
+            },
+            'c2': {
+                messages: [
+                    { id: mId(), sender: 'c2', text: 'Слушай, ты проверял последние обновления репозитория?', time: 'Вчера', type: 'text' },
+                    { id: mId(), sender: 'me', text: 'Да, Маркус, всё работает отлично.', time: 'Вчера', type: 'text' }
+                ]
+            },
+            'c3': {
+                messages: [
+                    { id: mId(), sender: 'c3', text: 'До встречи на конференции!', time: '12 окт', type: 'text' }
+                ]
+            },
+            'c4': {
+                messages: [
+                    { id: mId(), sender: 'c4', text: 'Добро пожаловать в Xena Messenger! Все сообщения защищены, а звонки работают в реальном времени.', time: 'Только что', type: 'text' }
+                ]
+            }
+        };
+
+        function mId() {
+            return 'msg_' + Math.random().toString(36.substr(2, 9));
+        }
+
+        function switchAuthTab(tab) {
+            activeTab = tab;
+            const loginBtn = document.getElementById('tab-login');
+            const regBtn = document.getElementById('tab-register');
+            const nameContainer = document.getElementById('name-field-container');
+            const submitBtn = document.getElementById('auth-submit-btn');
+
+            if (tab === 'login') {
+                loginBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all";
+                regBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
+                nameContainer.classList.add('hidden');
+                submitBtn.innerText = "Войти в систему";
+            } else {
+                regBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all";
+                loginBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
+                nameContainer.classList.remove('hidden');
+                submitBtn.innerText = "Зарегистрироваться";
+            }
+        }
+
+        function handleAuth(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('auth-username').value.trim();
+            const passwordInput = document.getElementById('auth-password').value.trim();
+            const nameInput = document.getElementById('reg-name').value.trim();
+
+            if (!usernameInput || !passwordInput) {
+                showToast("Заполните все обязательные поля", "error");
+                return;
+            }
+
+            if (activeTab === 'register' && !nameInput) {
+                showToast("Пожалуйста, укажите ваше имя", "error");
+                return;
+            }
+
+            currentUser = {
+                username: usernameInput,
+                name: activeTab === 'register' ? nameInput : (usernameInput.charAt(0).toUpperCase() + usernameInput.slice(1)),
+                avatar: (activeTab === 'register' ? nameInput : usernameInput).charAt(0).toUpperCase()
+            };
+
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+
+            document.getElementById('current-user-name').innerText = currentUser.name;
+            document.getElementById('current-user-avatar').innerText = currentUser.avatar;
+            document.getElementById('settings-name').value = currentUser.name;
+
+            renderChats();
+            showToast(`Добро пожаловать в Xena, ${currentUser.name}!`, "success");
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('auth-form').reset();
+            showToast("Вы успешно вышли из аккаунта", "info");
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgClass = 'bg-slate-800 text-white';
+            if (type === 'success') bgClass = 'bg-xena-700 text-white shadow-lg shadow-xena-600/30';
+            if (type === 'error') bgClass = 'bg-red-600 text-white shadow-lg shadow-red-600/30';
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+
+            setTimeout(() => { toast.classList.remove('translate-y-2', 'opacity-0'); }, 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function renderChats(filterText = '') {
+            const listContainer = document.getElementById('chats-list');
+            listContainer.innerHTML = '';
+
+            const filtered = initialContacts.filter(c => c.name.toLowerCase().includes(filterText.toLowerCase()));
+
+            if (filtered.length === 0) {
+                listContainer.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">Контакты не найдены</div>`;
+                return;
+            }
+
+            filtered.forEach(contact => {
+                const chatObj = chatsData[contact.id] || { messages: [] };
+                const lastMsg = chatObj.messages[chatObj.messages.length - 1] || { text: contact.bio, time: '' };
+                const isActive = activeChatId === contact.id;
+
+                const item = document.createElement('div');
+                item.className = `px-4 py-3.5 flex items-center gap-3 cursor-pointer transition-all hover:bg-xena-50/80 ${isActive ? 'bg-xena-100/70 border-r-4 border-xena-600' : ''}`;
+                item.onclick = () => selectChat(contact.id);
+
+                item.innerHTML = `
+                    <div class="relative flex-shrink-0">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-xena-400 to-xena-600 text-white font-bold flex items-center justify-center shadow-md">${contact.avatar}</div>
+                        ${contact.online ? '<span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white"></span>' : ''}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between mb-1">
+                            <h4 class="font-bold text-sm text-slate-900 truncate">${contact.name} ${contact.verified ? '<i class="fa-solid fa-circle-check text-xena-600 text-xs ml-1"></i>' : ''}</h4>
+                            <span class="text-xs text-slate-400 font-medium">${lastMsg.time}</span>
+                        </div>
+                        <p class="text-xs text-slate-500 truncate">${lastMsg.text}</p>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function filterChats(val) {
+            renderChats(val);
+        }
+
+        function selectChat(contactId) {
+            activeChatId = contactId;
+            const contact = initialContacts.find(c => c.id === contactId);
+
+            document.getElementById('chat-empty-state').classList.add('hidden');
+            document.getElementById('active-chat-container').classList.remove('hidden');
+
+            document.getElementById('active-chat-name').innerText = contact.name;
+            document.getElementById('active-chat-status').innerText = contact.online ? 'в сети' : `был(а) в сети ${contact.lastSeen}`;
+            document.getElementById('active-chat-avatar').innerText = contact.avatar;
+
+            renderMessages();
+            renderChats(document.getElementById('chat-search').value);
+
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.add('hidden');
+            }
+        }
+
+        function backToSidebar() {
+            document.getElementById('sidebar').classList.remove('hidden');
+            document.getElementById('active-chat-container').classList.add('hidden');
+            document.getElementById('chat-empty-state').classList.remove('hidden');
+            activeChatId = null;
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '';
+
+            const chat = chatsData[activeChatId];
+            if (!chat || !chat.messages) return;
+
+            chat.messages.forEach(msg => {
+                const isMe = msg.sender === 'me';
+                const div = document.createElement('div');
+                div.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`;
+
+                div.innerHTML = `
+                    <div class="max-w-[75%] sm:max-w-[65%] rounded-2xl px-4 py-3 shadow-sm text-sm ${isMe ? 'bg-xena-bubbleOut text-slate-900 rounded-br-none' : 'bg-white text-slate-800 rounded-bl-none border border-xena-100'}">
+                        <p class="leading-relaxed break-words">${escapeHTML(msg.text)}</p>
+                        <div class="flex items-center justify-end gap-1 mt-1">
+                            <span class="text-[10px] text-slate-400 font-medium">${msg.time}</span>
+                            ${isMe ? '<i class="fa-solid fa-check-double text-[10px] text-xena-600"></i>' : ''}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function handleSendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+
+            if (!text || !activeChatId) return;
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (!chatsData[activeChatId]) {
+                chatsData[activeChatId] = { messages: [] };
+            }
+
+            chatsData[activeChatId].messages.push({
+                id: mId(),
+                sender: 'me',
+                text: text,
+                time: timeStr
+            });
+
+            input.value = '';
+            renderMessages();
+            renderChats(document.getElementById('chat-search').value);
+
+            setTimeout(() => { simulateAutoReply(); }, 1500);
+        }
+
+        function simulateAutoReply() {
+            if (!activeChatId) return;
+            const contact = initialContacts.find(c => c.id === activeChatId);
+            const typingIndicator = document.getElementById('typing-indicator');
+            const typingName = document.getElementById('typing-name');
+
+            typingName.innerText = contact.name;
+            typingIndicator.classList.remove('hidden');
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
+
+            setTimeout(() => {
+                typingIndicator.classList.add('hidden');
+                const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const replies = [
+                    "Полностью с тобой согласен! Отличная идея 👍",
+                    "Принято! Сейчас посмотрю детали.",
+                    "Xena Messenger работает потрясающе быстро ⚡",
+                    "Давай созвонимся через пару минут?"
+                ];
+                const randomReply = replies[Math.floor(Math.random() * replies.length)];
+
+                chatsData[activeChatId].messages.push({
+                    id: mId(),
+                    sender: activeChatId,
+                    text: randomReply,
+                    time: timeStr
+                });
+
+                renderMessages();
+                renderChats(document.getElementById('chat-search').value);
+            }, 2000);
+        }
+
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emoji-picker');
+            picker.classList.toggle('hidden');
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById('message-input');
+            input.value += emoji;
+            input.focus();
+            toggleEmojiPicker();
+        }
+
+        function triggerFileUpload() {
+            document.getElementById('file-input').click();
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file || !activeChatId) return;
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            chatsData[activeChatId].messages.push({
+                id: mId(),
+                sender: 'me',
+                text: `📎 [Файл: ${file.name}]`,
+                time: timeStr
+            });
+
+            renderMessages();
+            renderChats();
+            showToast(`Файл "${file.name}" успешно прикреплен`, "success");
+            e.target.value = '';
+        }
+
+        // WebRTC Real Calls
+        async function startCall(type) {
+            if (!activeChatId) return;
+            const contact = initialContacts.find(c => c.id === activeChatId);
+
+            document.getElementById('call-contact-name').innerText = contact.name;
+            document.getElementById('call-contact-avatar').innerText = contact.avatar;
+            document.getElementById('call-modal').classList.remove('hidden');
+
+            const localVideo = document.getElementById('local-video');
+            const remoteVideo = document.getElementById('remote-video');
+            const remotePlaceholder = document.getElementById('remote-video-placeholder');
+            const localContainer = document.getElementById('local-video-container');
+
+            callSeconds = 0;
+            document.getElementById('call-status-timer').innerText = "Соединение с абонентом...";
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: type === 'video'
+                });
+
+                localVideo.srcObject = localStream;
+                if (type === 'video') {
+                    localContainer.classList.remove('hidden');
+                    remoteVideo.classList.remove('hidden');
+                    remotePlaceholder.classList.add('hidden');
+                    remoteVideo.srcObject = localStream; 
+                } else {
+                    localContainer.classList.add('hidden');
+                    remoteVideo.classList.add('hidden');
+                    remotePlaceholder.classList.remove('hidden');
+                }
+
+                setTimeout(() => {
+                    document.getElementById('call-status-timer').innerText = "00:00";
+                    callTimerInterval = setInterval(() => {
+                        callSeconds++;
+                        const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+                        const secs = String(callSeconds % 60).padStart(2, '0');
+                        document.getElementById('call-status-timer').innerText = `${mins}:${secs}`;
+                    }, 1000);
+                }, 1500);
+
+            } catch (err) {
+                console.warn("Media access warning:", err);
+                if (type === 'video') localContainer.classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('call-status-timer').innerText = "00:00";
+                    callTimerInterval = setInterval(() => {
+                        callSeconds++;
+                        const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+                        const secs = String(callSeconds % 60).padStart(2, '0');
+                        document.getElementById('call-status-timer').innerText = `${mins}:${secs}`;
+                    }, 1000);
+                }, 1500);
+                showToast("Активен защищенный симулированный канал связи", "info");
+            }
+        }
+
+        function endCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (callTimerInterval) {
+                clearInterval(callTimerInterval);
+                callTimerInterval = null;
+            }
+            document.getElementById('call-modal').classList.add('hidden');
+            document.getElementById('local-video').srcObject = null;
+            document.getElementById('remote-video').srcObject = null;
+            showToast("Звонок завершен", "info");
+        }
+
+        function toggleAudioMute() {
+            if (!localStream) return;
+            isAudioMuted = !isAudioMuted;
+            localStream.getAudioTracks().forEach(track => track.enabled = !isAudioMuted);
+            const btn = document.getElementById('mute-btn');
+            btn.className = `w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isAudioMuted ? 'bg-red-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`;
+            btn.innerHTML = `<i class="fa-solid fa-microphone${isAudioMuted ? '-slash' : ''} text-base"></i>`;
+            showToast(isAudioMuted ? "Микрофон выключен" : "Микрофон включен", "info");
+        }
+
+        function toggleVideoMute() {
+            if (!localStream) return;
+            isVideoMuted = !isVideoMuted;
+            localStream.getVideoTracks().forEach(track => track.enabled = !isVideoMuted);
+            const btn = document.getElementById('video-btn');
+            btn.className = `w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isVideoMuted ? 'bg-red-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`;
+            btn.innerHTML = `<i class="fa-solid fa-video${isVideoMuted ? '-slash' : ''} text-base"></i>`;
+            showToast(isVideoMuted ? "Камера отключена" : "Камера включена", "info");
+        }
+
+        function toggleSettingsModal(open) {
+            const modal = document.getElementById('settings-modal');
+            if (open) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        function saveSettings() {
+            const newName = document.getElementById('settings-name').value.trim();
+            if (newName && currentUser) {
+                currentUser.name = newName;
+                currentUser.avatar = newName.charAt(0).toUpperCase();
+                document.getElementById('current-user-name').innerText = currentUser.name;
+                document.getElementById('current-user-avatar').innerText = currentUser.avatar;
+                showToast("Настройки успешно сохранены", "success");
+                toggleSettingsModal(false);
+            }
+        }
+
+        function toggleChatDetails() {
+            showToast("Шифрование: End-to-End активировано 🔒", "info");
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
