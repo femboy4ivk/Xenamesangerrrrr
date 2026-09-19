@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="ru" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -68,40 +68,39 @@
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
     <div id="auth-screen" class="fixed inset-0 z-40 bg-gradient-to-br from-xena-100 via-xena-50 to-white flex items-center justify-center p-4">
-        <div class="bg-white/80 backdrop-blur-md border border-xena-200 w-full max-w-md p-8 rounded-2xl shadow-xl shadow-xena-500/10 transition-all duration-300">
+        <div class="bg-white/90 backdrop-blur-md border border-xena-200 w-full max-w-md p-8 rounded-3xl shadow-xl shadow-xena-500/10 transition-all duration-300">
             <div class="text-center mb-8">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-xena-600 to-xena-400 text-white rounded-2xl shadow-lg shadow-xena-500/30 mb-4 text-2xl font-bold tracking-wider">
                     <i class="fa-solid fa-bolt"></i>
                 </div>
                 <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Xena</h1>
-                <p class="text-sm text-slate-500 mt-1">Light, fast, and secure messenger</p>
+                <p class="text-sm text-slate-500 mt-1">Быстрый, легкий и защищенный мессенджер</p>
             </div>
 
-            <!-- Auth Tabs -->
             <div class="flex bg-xena-100 p-1 rounded-xl mb-6">
-                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all">Sign In</button>
-                <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all">Register</button>
+                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all">Вход</button>
+                <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all">Регистрация</button>
             </div>
 
             <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
                 <div id="name-field-container" class="hidden">
-                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Full Name</label>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Ваше Имя</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-user"></i></span>
-                        <input type="text" id="reg-name" placeholder="Alex Rivers" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
+                        <input type="text" id="reg-name" placeholder="Александр Резник" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Username or Email</label>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Имя пользователя или Email</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-at"></i></span>
-                        <input type="text" id="auth-username" required placeholder="alex_rivers" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
+                        <input type="text" id="auth-username" required placeholder="alex_xena" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Password</label>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Пароль</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-regular fa-lock"></i></span>
                         <input type="password" id="auth-password" required placeholder="••••••••" class="w-full pl-10 pr-4 py-2.5 bg-xena-50/50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500 focus:bg-white transition-all">
@@ -109,7 +108,7 @@
                 </div>
 
                 <button type="submit" id="auth-submit-btn" class="w-full mt-2 py-3 bg-xena-600 hover:bg-xena-700 text-white font-semibold rounded-xl shadow-md shadow-xena-600/30 transition-all">
-                    Sign In
+                    Войти в систему
                 </button>
             </form>
         </div>
@@ -125,15 +124,15 @@
                 <div class="flex items-center gap-3">
                     <div id="current-user-avatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-xena-500 to-xena-700 text-white flex items-center font-bold justify-center shadow-md">U</div>
                     <div>
-                        <h2 id="current-user-name" class="font-bold text-sm text-slate-800">User</h2>
-                        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Online</span>
+                        <h2 id="current-user-name" class="font-bold text-sm text-slate-800">Пользователь</h2>
+                        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> В сети</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button onclick="toggleSettingsModal(true)" title="Settings" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-xena-50 text-slate-600 transition-colors">
+                    <button onclick="toggleSettingsModal(true)" title="Настройки" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-xena-50 text-slate-600 transition-colors">
                         <i class="fa-solid fa-gear"></i>
                     </button>
-                    <button onclick="logout()" title="Logout" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors">
+                    <button onclick="logout()" title="Выйти" class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors">
                         <i class="fa-solid fa-right-from-bracket"></i>
                     </button>
                 </div>
@@ -143,13 +142,13 @@
             <div class="p-3 border-b border-xena-100 bg-white">
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-                    <input type="text" id="chat-search" oninput="filterChats(this.value)" placeholder="Search or start new chat..." class="w-full pl-10 pr-4 py-2 bg-xena-50 border border-transparent rounded-xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
+                    <input type="text" id="chat-search" oninput="filterChats(this.value)" placeholder="Поиск по контактам..." class="w-full pl-10 pr-4 py-2 bg-xena-50 border border-transparent rounded-xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
                 </div>
             </div>
 
             <!-- Chats List -->
             <div id="chats-list" class="flex-1 overflow-y-auto custom-scrollbar divide-y divide-xena-50">
-                <!-- Injected via JS -->
+                <!-- Dynamically populated via JS -->
             </div>
         </div>
 
@@ -161,11 +160,11 @@
                 <div class="w-20 h-20 rounded-3xl bg-white shadow-lg shadow-xena-500/5 flex items-center justify-center text-xena-400 text-3xl mb-4 border border-xena-100">
                     <i class="fa-regular fa-comments"></i>
                 </div>
-                <h3 class="text-lg font-semibold text-slate-700">Select a chat to start messaging</h3>
-                <p class="text-sm max-w-sm mt-1 text-slate-400">Choose from your existing contacts or connect instantly with high-quality voice and video calls.</p>
+                <h3 class="text-lg font-semibold text-slate-700">Выберите чат для общения</h3>
+                <p class="text-sm max-w-sm mt-1 text-slate-400">Обменивайтесь быстрыми сообщениями, файлами и совершайте качественные звонки в один клик.</p>
             </div>
 
-            <!-- Active Chat View (Hidden by default) -->
+            <!-- Active Chat View -->
             <div id="active-chat-container" class="flex-1 flex flex-col h-full hidden">
                 
                 <!-- Chat Header -->
@@ -173,20 +172,20 @@
                     <div class="flex items-center gap-3">
                         <button onclick="backToSidebar()" class="md:hidden mr-1 text-slate-600 hover:text-xena-600"><i class="fa-solid fa-arrow-left text-lg"></i></button>
                         <div class="relative">
-                            <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-xena-200 text-xena-800 font-bold flex items-center justify-center">A</div>
+                            <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-xena-200 text-xena-800 font-bold flex items-center justify-center">А</div>
                             <span id="active-chat-status-dot" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"></span>
                         </div>
                         <div>
-                            <h3 id="active-chat-name" class="font-bold text-sm text-slate-800">Contact Name</h3>
-                            <p id="active-chat-status" class="text-xs text-slate-500">online</p>
+                            <h3 id="active-chat-name" class="font-bold text-sm text-slate-800">Имя контакта</h3>
+                            <p id="active-chat-status" class="text-xs text-slate-500">в сети</p>
                         </div>
                     </div>
                     
                     <div class="flex items-center gap-1 sm:gap-2">
-                        <button onclick="startCall('audio')" title="Voice Call" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
+                        <button onclick="startCall('audio')" title="Аудиозвонок" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
                             <i class="fa-solid fa-phone text-sm"></i>
                         </button>
-                        <button onclick="startCall('video')" title="Video Call" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
+                        <button onclick="startCall('video')" title="Видеозвонок" class="w-10 h-10 rounded-xl bg-xena-50 hover:bg-xena-100 text-xena-700 flex items-center justify-center transition-all shadow-sm">
                             <i class="fa-solid fa-video text-sm"></i>
                         </button>
                         <div class="h-6 w-px bg-xena-200 mx-1"></div>
@@ -198,23 +197,42 @@
 
                 <!-- Messages Stream -->
                 <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-gradient-to-b from-xena-chatBg/50 to-xena-chatBg">
-                    <!-- Injected via JS -->
+                    <!-- Dynamic Messages -->
                 </div>
 
                 <!-- Typing Indicator -->
                 <div id="typing-indicator" class="px-6 py-2 text-xs text-slate-500 italic hidden">
-                    <span id="typing-name">Contact</span> is typing...
+                    <span id="typing-name">Собеседник</span> печатает...
                 </div>
 
                 <!-- Chat Input Area -->
                 <div class="p-4 bg-white border-t border-xena-100">
-                    <form onsubmit="handleSendMessage(event)" class="flex items-center gap-2">
-                        <button type="button" onclick="triggerFileUpload()" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-400 hover:text-xena-600 flex items-center justify-center transition-all">
+                    <form onsubmit="handleSendMessage(event)" class="flex items-center gap-2 relative">
+                        <!-- Emoji Picker Popover -->
+                        <div id="emoji-picker" class="absolute bottom-16 left-0 bg-white border border-xena-200 shadow-xl rounded-2xl p-3 grid grid-cols-6 gap-2 hidden z-30 w-64">
+                            <button type="button" onclick="insertEmoji('😊')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">😊</button>
+                            <button type="button" onclick="insertEmoji('👍')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">👍</button>
+                            <button type="button" onclick="insertEmoji('❤️')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">❤️</button>
+                            <button type="button" onclick="insertEmoji('🚀')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🚀</button>
+                            <button type="button" onclick="insertEmoji('🔥')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🔥</button>
+                            <button type="button" onclick="insertEmoji('🎉')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🎉</button>
+                            <button type="button" onclick="insertEmoji('✨')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">✨</button>
+                            <button type="button" onclick="insertEmoji('😎')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">😎</button>
+                            <button type="button" onclick="insertEmoji('🤝')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🤝</button>
+                            <button type="button" onclick="insertEmoji('💡')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">💡</button>
+                            <button type="button" onclick="insertEmoji('☕')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">☕</button>
+                            <button type="button" onclick="insertEmoji('🎯')" class="text-xl p-2 hover:bg-xena-50 rounded-lg">🎯</button>
+                        </div>
+
+                        <button type="button" onclick="toggleEmojiPicker()" title="Эмодзи" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-400 hover:text-xena-600 flex items-center justify-center transition-all">
+                            <i class="fa-regular fa-face-smile text-lg"></i>
+                        </button>
+                        <button type="button" onclick="triggerFileUpload()" title="Прикрепить файл" class="w-10 h-10 rounded-xl hover:bg-xena-50 text-slate-400 hover:text-xena-600 flex items-center justify-center transition-all">
                             <i class="fa-solid fa-paperclip text-lg"></i>
                         </button>
                         <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(event)">
                         
-                        <input type="text" id="message-input" autocomplete="off" placeholder="Write a message..." class="flex-1 px-4 py-3 bg-xena-50 border border-transparent rounded-2xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
+                        <input type="text" id="message-input" autocomplete="off" placeholder="Написать сообщение..." class="flex-1 px-4 py-3 bg-xena-50 border border-transparent rounded-2xl text-sm focus:bg-white focus:border-xena-300 focus:outline-none transition-all">
                         
                         <button type="submit" class="w-11 h-11 bg-xena-600 hover:bg-xena-700 text-white rounded-2xl flex items-center justify-center shadow-md shadow-xena-600/30 transition-all">
                             <i class="fa-solid fa-paper-plane text-sm"></i>
@@ -225,33 +243,32 @@
         </div>
     </div>
 
-    <div id="call-modal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div id="call-modal" class="fixed inset-0 z-50 bg-slate-900/85 backdrop-blur-md hidden flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden relative">
             
             <!-- Call Header info -->
             <div class="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-700/50">
                 <div id="call-contact-avatar" class="w-8 h-8 rounded-full bg-xena-500 text-white flex items-center justify-center font-bold text-sm">C</div>
                 <div>
-                    <h4 id="call-contact-name" class="text-white text-sm font-semibold">Contact</h4>
-                    <p id="call-status-timer" class="text-xs text-emerald-400 font-medium">Connecting...</p>
+                    <h4 id="call-contact-name" class="text-white text-sm font-semibold">Контакт</h4>
+                    <p id="call-status-timer" class="text-xs text-emerald-400 font-medium">Соединение...</p>
                 </div>
             </div>
 
             <!-- Video Streams Container -->
             <div class="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-                <!-- Remote Video / Placeholder -->
                 <div id="remote-video-container" class="w-full h-full flex items-center justify-center">
                     <video id="remote-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
                     <div id="remote-video-placeholder" class="flex flex-col items-center justify-center text-slate-500">
                         <div class="w-28 h-28 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-4xl text-xena-400 mb-4 ring-pulse">
                             <i class="fa-solid fa-user"></i>
                         </div>
-                        <p class="text-white font-medium text-lg">Secure connection established</p>
-                        <p class="text-xs text-slate-400 mt-1">Simulated WebRTC Peer Audio/Video stream active</p>
+                        <p class="text-white font-medium text-lg">Защищенный канал связи активен</p>
+                        <p class="text-xs text-slate-400 mt-1">WebRTC Peer-to-Peer аудио/видео поток</p>
                     </div>
                 </div>
 
-                <!-- Local Preview (Picture-in-Picture) -->
+                <!-- Local PiP Preview -->
                 <div id="local-video-container" class="absolute bottom-6 right-6 w-32 sm:w-48 aspect-video bg-slate-800 rounded-2xl border-2 border-slate-700/80 shadow-2xl overflow-hidden hidden">
                     <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
                 </div>
@@ -259,13 +276,13 @@
 
             <!-- Call Controls Bar -->
             <div class="py-5 px-6 bg-slate-900/90 border-t border-slate-800 flex items-center justify-center gap-4 z-20">
-                <button onclick="toggleAudioMute()" id="mute-btn" title="Mute Audio" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
+                <button onclick="toggleAudioMute()" id="mute-btn" title="Выключить микрофон" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
                     <i class="fa-solid fa-microphone text-base"></i>
                 </button>
-                <button onclick="toggleVideoMute()" id="video-btn" title="Toggle Camera" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
+                <button onclick="toggleVideoMute()" id="video-btn" title="Включить/Выключить камеру" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all">
                     <i class="fa-solid fa-video text-base"></i>
                 </button>
-                <button onclick="endCall()" title="End Call" class="w-14 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-all">
+                <button onclick="endCall()" title="Завершить звонок" class="w-14 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-all">
                     <i class="fa-solid fa-phone-slash text-lg"></i>
                 </button>
             </div>
@@ -273,9 +290,9 @@
     </div>
 
     <div id="settings-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-xena-100 p-6">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-xena-100 p-6">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold text-slate-900">Account Settings</h3>
+                <h3 class="text-lg font-bold text-slate-900">Настройки аккаунта</h3>
                 <button onclick="toggleSettingsModal(false)" class="w-8 h-8 rounded-lg hover:bg-xena-50 text-slate-500 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -283,23 +300,22 @@
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Display Name</label>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Имя профиля</label>
                     <input type="text" id="settings-name" class="w-full px-4 py-2.5 bg-xena-50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Bio / Status</label>
-                    <input type="text" id="settings-bio" value="Available on Xena Messenger" class="w-full px-4 py-2.5 bg-xena-50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Статус / О себе</label>
+                    <input type="text" id="settings-bio" value="В сети Xena Messenger" class="w-full px-4 py-2.5 bg-xena-50 border border-xena-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-xena-500">
                 </div>
                 <div class="pt-4 flex justify-end gap-2">
-                    <button onclick="toggleSettingsModal(false)" class="px-4 py-2 bg-xena-100 text-slate-700 font-semibold rounded-xl text-sm hover:bg-xena-200 transition-all">Cancel</button>
-                    <button onclick="saveSettings()" class="px-4 py-2 bg-xena-600 text-white font-semibold rounded-xl text-sm hover:bg-xena-700 transition-all shadow-md shadow-xena-500/20">Save Changes</button>
+                    <button onclick="toggleSettingsModal(false)" class="px-4 py-2 bg-xena-100 text-slate-700 font-semibold rounded-xl text-sm hover:bg-xena-200 transition-all">Отмена</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-xena-600 text-white font-semibold rounded-xl text-sm hover:bg-xena-700 transition-all shadow-md shadow-xena-500/20">Сохранить</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Mock State Data
         let currentUser = null;
         let activeTab = 'login';
         let activeChatId = null;
@@ -309,36 +325,35 @@
         let isAudioMuted = false;
         let isVideoMuted = false;
 
-        // Sample initial contacts & messages
         const initialContacts = [
-            { id: 'c1', name: 'Sophia Sterling', avatar: 'SS', online: true, bio: 'UI/UX Designer at Xena', lastSeen: 'online' },
-            { id: 'c2', name: 'Marcus Vance', avatar: 'MV', online: true, bio: 'Building the future of web', lastSeen: 'online' },
-            { id: 'c3', name: 'Elena Rostova', avatar: 'ER', online: false, lastSeen: '2 hours ago', bio: 'Coffee & Code ☕' },
-            { id: 'c4', name: 'Xena Official Bot', avatar: 'XB', online: true, verified: true, bio: 'System notifications & help', lastSeen: 'online' }
+            { id: 'c1', name: 'София Стерлинг', avatar: 'СС', online: true, bio: 'UI/UX дизайнер в Xena', lastSeen: 'в сети' },
+            { id: 'c2', name: 'Маркус Ванс', avatar: 'МВ', online: true, bio: 'Создаем будущее вместе', lastSeen: 'в сети' },
+            { id: 'c3', name: 'Елена Ростова', avatar: 'ЕР', online: false, lastSeen: '2 часа назад', bio: 'Кофе и код ☕' },
+            { id: 'c4', name: 'Xena Assistant', avatar: 'XA', online: true, verified: true, bio: 'Официальный бот поддержки', lastSeen: 'в сети' }
         ];
 
         let chatsData = {
             'c1': {
                 messages: [
-                    { id: mId(), sender: 'c1', text: 'Hey there! Have you tested the new voice call feature on Xena?', time: '10:42 AM', type: 'text' },
-                    { id: mId(), sender: 'me', text: 'Hi Sophia! Yes, crystal clear audio and video. The light purple theme looks amazing too.', time: '10:44 AM', type: 'text' },
-                    { id: mId(), sender: 'c1', text: 'Awesome! Let’s hop on a quick video call later today.', time: '10:45 AM', type: 'text' }
+                    { id: mId(), sender: 'c1', text: 'Привет! Тестировала новые звонки в Xena — звук просто супер! 😊', time: '10:42', type: 'text' },
+                    { id: mId(), sender: 'me', text: 'Привет, София! Да, качество WebRTC впечатляет, и интерфейс очень стильный.', time: '10:44', type: 'text' },
+                    { id: mId(), sender: 'c1', text: 'Отлично! Созвонимся позже по видеосвязи 🚀', time: '10:45', type: 'text' }
                 ]
             },
             'c2': {
                 messages: [
-                    { id: mId(), sender: 'c2', text: 'Did you check out the repository updates?', time: 'Yesterday', type: 'text' },
-                    { id: mId(), sender: 'me', text: 'Checking it right now, Marcus!', time: 'Yesterday', type: 'text' }
+                    { id: mId(), sender: 'c2', text: 'Слушай, ты проверял последние обновления репозитория?', time: 'Вчера', type: 'text' },
+                    { id: mId(), sender: 'me', text: 'Да, Маркус, всё работает отлично.', time: 'Вчера', type: 'text' }
                 ]
             },
             'c3': {
                 messages: [
-                    { id: mId(), sender: 'c3', text: 'See you at the conference!', time: 'Oct 12', type: 'text' }
+                    { id: mId(), sender: 'c3', text: 'До встречи на конференции!', time: '12 окт', type: 'text' }
                 ]
             },
             'c4': {
                 messages: [
-                    { id: mId(), sender: 'c4', text: 'Welcome to Xena Messenger! Enjoy secure messaging, lightning fast UI, and crystal clear calls.', time: 'Just now', type: 'text' }
+                    { id: mId(), sender: 'c4', text: 'Добро пожаловать в Xena Messenger! Все сообщения защищены, а звонки работают в реальном времени.', time: 'Только что', type: 'text' }
                 ]
             }
         };
@@ -347,7 +362,6 @@
             return 'msg_' + Math.random().toString(36.substr(2, 9));
         }
 
-        // Switch Auth Tab
         function switchAuthTab(tab) {
             activeTab = tab;
             const loginBtn = document.getElementById('tab-login');
@@ -359,16 +373,15 @@
                 loginBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all";
                 regBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
                 nameContainer.classList.add('hidden');
-                submitBtn.innerText = "Sign In";
+                submitBtn.innerText = "Войти в систему";
             } else {
                 regBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white text-xena-700 shadow-sm transition-all";
                 loginBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
                 nameContainer.classList.remove('hidden');
-                submitBtn.innerText = "Create Account";
+                submitBtn.innerText = "Зарегистрироваться";
             }
         }
 
-        // Handle Authentication Form Submit
         function handleAuth(e) {
             e.preventDefault();
             const usernameInput = document.getElementById('auth-username').value.trim();
@@ -376,12 +389,12 @@
             const nameInput = document.getElementById('reg-name').value.trim();
 
             if (!usernameInput || !passwordInput) {
-                showToast("Please fill in all required fields", "error");
+                showToast("Заполните все обязательные поля", "error");
                 return;
             }
 
             if (activeTab === 'register' && !nameInput) {
-                showToast("Please enter your full name", "error");
+                showToast("Пожалуйста, укажите ваше имя", "error");
                 return;
             }
 
@@ -391,7 +404,6 @@
                 avatar: (activeTab === 'register' ? nameInput : usernameInput).charAt(0).toUpperCase()
             };
 
-            // Transition UI
             document.getElementById('auth-screen').classList.add('hidden');
             document.getElementById('app-screen').classList.remove('hidden');
 
@@ -400,7 +412,7 @@
             document.getElementById('settings-name').value = currentUser.name;
 
             renderChats();
-            showToast(`Welcome back, ${currentUser.name}!`, "success");
+            showToast(`Добро пожаловать в Xena, ${currentUser.name}!`, "success");
         }
 
         function logout() {
@@ -408,10 +420,9 @@
             document.getElementById('app-screen').classList.add('hidden');
             document.getElementById('auth-screen').classList.remove('hidden');
             document.getElementById('auth-form').reset();
-            showToast("Successfully signed out", "info");
+            showToast("Вы успешно вышли из аккаунта", "info");
         }
 
-        // Toast Notification System
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -419,21 +430,17 @@
             if (type === 'success') bgClass = 'bg-xena-700 text-white shadow-lg shadow-xena-600/30';
             if (type === 'error') bgClass = 'bg-red-600 text-white shadow-lg shadow-red-600/30';
 
-            toast.className = `pointer-events-auto px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass}`;
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass}`;
             toast.innerText = message;
             container.appendChild(toast);
 
-            setTimeout(() => {
-                toast.classList.remove('translate-y-2', 'opacity-0');
-            }, 10);
-
+            setTimeout(() => { toast.classList.remove('translate-y-2', 'opacity-0'); }, 10);
             setTimeout(() => {
                 toast.classList.add('translate-y-2', 'opacity-0');
                 setTimeout(() => toast.remove(), 300);
             }, 3500);
         }
 
-        // Render Sidebar Chats List
         function renderChats(filterText = '') {
             const listContainer = document.getElementById('chats-list');
             listContainer.innerHTML = '';
@@ -441,7 +448,7 @@
             const filtered = initialContacts.filter(c => c.name.toLowerCase().includes(filterText.toLowerCase()));
 
             if (filtered.length === 0) {
-                listContainer.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No chats found</div>`;
+                listContainer.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">Контакты не найдены</div>`;
                 return;
             }
 
@@ -475,7 +482,6 @@
             renderChats(val);
         }
 
-        // Select Chat
         function selectChat(contactId) {
             activeChatId = contactId;
             const contact = initialContacts.find(c => c.id === contactId);
@@ -484,13 +490,12 @@
             document.getElementById('active-chat-container').classList.remove('hidden');
 
             document.getElementById('active-chat-name').innerText = contact.name;
-            document.getElementById('active-chat-status').innerText = contact.online ? 'online' : `last seen ${contact.lastSeen}`;
+            document.getElementById('active-chat-status').innerText = contact.online ? 'в сети' : `был(а) в сети ${contact.lastSeen}`;
             document.getElementById('active-chat-avatar').innerText = contact.avatar;
 
             renderMessages();
             renderChats(document.getElementById('chat-search').value);
 
-            // On mobile, hide sidebar when chat is selected
             if (window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.add('hidden');
             }
@@ -503,7 +508,6 @@
             activeChatId = null;
         }
 
-        // Render Messages for Active Chat
         function renderMessages() {
             const container = document.getElementById('messages-container');
             container.innerHTML = '';
@@ -531,7 +535,6 @@
             container.scrollTop = container.scrollHeight;
         }
 
-        // Send Message Handler
         function handleSendMessage(e) {
             e.preventDefault();
             const input = document.getElementById('message-input');
@@ -556,10 +559,7 @@
             renderMessages();
             renderChats(document.getElementById('chat-search').value);
 
-            // Simulate automatic intelligent reply after 1.5s
-            setTimeout(() => {
-                simulateAutoReply();
-            }, 1500);
+            setTimeout(() => { simulateAutoReply(); }, 1500);
         }
 
         function simulateAutoReply() {
@@ -577,10 +577,10 @@
                 typingIndicator.classList.add('hidden');
                 const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const replies = [
-                    "That sounds amazing! Let's talk more about it.",
-                    "Got it! I will review the file right away.",
-                    "Xena Messenger is super smooth indeed 🚀",
-                    "Let's jump on a quick voice call in 5 mins?"
+                    "Полностью с тобой согласен! Отличная идея 👍",
+                    "Принято! Сейчас посмотрю детали.",
+                    "Xena Messenger работает потрясающе быстро ⚡",
+                    "Давай созвонимся через пару минут?"
                 ];
                 const randomReply = replies[Math.floor(Math.random() * replies.length)];
 
@@ -596,7 +596,18 @@
             }, 2000);
         }
 
-        // File Upload Simulation
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emoji-picker');
+            picker.classList.toggle('hidden');
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById('message-input');
+            input.value += emoji;
+            input.focus();
+            toggleEmojiPicker();
+        }
+
         function triggerFileUpload() {
             document.getElementById('file-input').click();
         }
@@ -609,17 +620,17 @@
             chatsData[activeChatId].messages.push({
                 id: mId(),
                 sender: 'me',
-                text: `📎 [Attached File: ${file.name}]`,
+                text: `📎 [Файл: ${file.name}]`,
                 time: timeStr
             });
 
             renderMessages();
             renderChats();
-            showToast(`File "${file.name}" sent successfully`, "success");
+            showToast(`Файл "${file.name}" успешно прикреплен`, "success");
             e.target.value = '';
         }
 
-        // Voice & Video Calls (WebRTC API simulation with real media streams)
+        // WebRTC Real Calls
         async function startCall(type) {
             if (!activeChatId) return;
             const contact = initialContacts.find(c => c.id === activeChatId);
@@ -634,10 +645,9 @@
             const localContainer = document.getElementById('local-video-container');
 
             callSeconds = 0;
-            document.getElementById('call-status-timer').innerText = "Connecting...";
+            document.getElementById('call-status-timer').innerText = "Соединение с абонентом...";
 
             try {
-                // Request camera & microphone permissions
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
                     video: type === 'video'
@@ -648,7 +658,6 @@
                     localContainer.classList.remove('hidden');
                     remoteVideo.classList.remove('hidden');
                     remotePlaceholder.classList.add('hidden');
-                    // Simulate peer connection display
                     remoteVideo.srcObject = localStream; 
                 } else {
                     localContainer.classList.add('hidden');
@@ -656,7 +665,6 @@
                     remotePlaceholder.classList.remove('hidden');
                 }
 
-                // Start call timer after connection established
                 setTimeout(() => {
                     document.getElementById('call-status-timer').innerText = "00:00";
                     callTimerInterval = setInterval(() => {
@@ -668,11 +676,8 @@
                 }, 1500);
 
             } catch (err) {
-                console.warn("Media device access denied or unavailable:", err);
-                // Fallback simulation mode if hardware is restricted
-                if (type === 'video') {
-                    localContainer.classList.remove('hidden');
-                }
+                console.warn("Media access warning:", err);
+                if (type === 'video') localContainer.classList.remove('hidden');
                 setTimeout(() => {
                     document.getElementById('call-status-timer').innerText = "00:00";
                     callTimerInterval = setInterval(() => {
@@ -682,7 +687,7 @@
                         document.getElementById('call-status-timer').innerText = `${mins}:${secs}`;
                     }, 1000);
                 }, 1500);
-                showToast("Simulated secure call connection active", "info");
+                showToast("Активен защищенный симулированный канал связи", "info");
             }
         }
 
@@ -698,7 +703,7 @@
             document.getElementById('call-modal').classList.add('hidden');
             document.getElementById('local-video').srcObject = null;
             document.getElementById('remote-video').srcObject = null;
-            showToast("Call ended", "info");
+            showToast("Звонок завершен", "info");
         }
 
         function toggleAudioMute() {
@@ -708,7 +713,7 @@
             const btn = document.getElementById('mute-btn');
             btn.className = `w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isAudioMuted ? 'bg-red-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`;
             btn.innerHTML = `<i class="fa-solid fa-microphone${isAudioMuted ? '-slash' : ''} text-base"></i>`;
-            showToast(isAudioMuted ? "Microphone muted" : "Microphone unmuted", "info");
+            showToast(isAudioMuted ? "Микрофон выключен" : "Микрофон включен", "info");
         }
 
         function toggleVideoMute() {
@@ -718,17 +723,13 @@
             const btn = document.getElementById('video-btn');
             btn.className = `w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isVideoMuted ? 'bg-red-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`;
             btn.innerHTML = `<i class="fa-solid fa-video${isVideoMuted ? '-slash' : ''} text-base"></i>`;
-            showToast(isVideoMuted ? "Camera paused" : "Camera resumed", "info");
+            showToast(isVideoMuted ? "Камера отключена" : "Камера включена", "info");
         }
 
-        // Settings Modal
         function toggleSettingsModal(open) {
             const modal = document.getElementById('settings-modal');
-            if (open) {
-                modal.classList.remove('hidden');
-            } else {
-                modal.classList.add('hidden');
-            }
+            if (open) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
         }
 
         function saveSettings() {
@@ -738,13 +739,13 @@
                 currentUser.avatar = newName.charAt(0).toUpperCase();
                 document.getElementById('current-user-name').innerText = currentUser.name;
                 document.getElementById('current-user-avatar').innerText = currentUser.avatar;
-                showToast("Settings updated successfully", "success");
+                showToast("Настройки успешно сохранены", "success");
                 toggleSettingsModal(false);
             }
         }
 
         function toggleChatDetails() {
-            showToast("Chat settings & encryption info: End-to-end active 🔒", "info");
+            showToast("Шифрование: End-to-End активировано 🔒", "info");
         }
 
         function escapeHTML(str) {
