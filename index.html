@@ -12,9 +12,7 @@
             darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
                         brand: {
                             50: '#f0fdf4',
@@ -29,60 +27,37 @@
         }
     </script>
     <style>
-        /* Custom scrollbar for clean UI */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(156, 163, 175, 0.5);
-            border-radius: 9999px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(107, 114, 128, 0.8);
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.8); }
     </style>
 </head>
-<body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden">
+<body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden transition-colors duration-200">
 
-    <div id="app" class="h-full w-full flex flex-col">
-        <!-- Rendered dynamically via JavaScript -->
-    </div>
+    <div id="app" class="h-full w-full flex flex-col"></div>
 
     <script>
-        // --- STORAGE & STATE MANAGEMENT ---
         const DB = {
             getUsers() {
-                try {
-                    return JSON.parse(localStorage.getItem('xena_users')) || [];
-                } catch (e) { return []; }
+                try { return JSON.parse(localStorage.getItem('xena_users')) || []; } catch(e){ return []; }
             },
-            saveUsers(users) {
-                localStorage.setItem('xena_users', JSON.stringify(users));
-            },
+            saveUsers(users) { localStorage.setItem('xena_users', JSON.stringify(users)); },
             getCurrentUser() {
-                try {
-                    return JSON.parse(localStorage.getItem('xena_current_user')) || null;
-                } catch (e) { return null; }
+                try { return JSON.parse(localStorage.getItem('xena_current_user')) || null; } catch(e){ return null; }
             },
             setCurrentUser(user) {
-                if (user) {
-                    localStorage.setItem('xena_current_user', JSON.stringify(user));
-                } else {
-                    localStorage.removeItem('xena_current_user');
-                }
+                if (user) localStorage.setItem('xena_current_user', JSON.stringify(user));
+                else localStorage.removeItem('xena_current_user');
             },
             getMessages() {
-                try {
-                    return JSON.parse(localStorage.getItem('xena_messages')) || [];
-                } catch (e) { return []; }
+                try { return JSON.parse(localStorage.getItem('xena_messages')) || []; } catch(e){ return []; }
             },
-            saveMessages(messages) {
-                localStorage.setItem('xena_messages', JSON.stringify(messages));
+            saveMessages(messages) { localStorage.setItem('xena_messages', JSON.stringify(messages)); },
+            getGroups() {
+                try { return JSON.parse(localStorage.getItem('xena_groups')) || []; } catch(e){ return []; }
             },
+            saveGroups(groups) { localStorage.setItem('xena_groups', JSON.stringify(groups)); },
             updateUser(updatedUser) {
                 let users = this.getUsers();
                 users = users.map(u => u.id === updatedUser.id ? updatedUser : u);
@@ -94,14 +69,14 @@
             }
         };
 
-        // Poll for cross-tab storage changes (syncing real-time updates between different browsers/tabs)
+        // Cross-tab synchronization
         window.addEventListener('storage', (e) => {
-            if (['xena_users', 'xena_messages', 'xena_current_user'].includes(e.key)) {
+            if (['xena_users', 'xena_messages', 'xena_groups', 'xena_current_user'].includes(e.key)) {
                 renderApp();
             }
         });
 
-        // Periodic check for database updates to keep tabs in sync even if storage event misses
+        // Polling loop for active sync across different browser windows/tabs
         setInterval(() => {
             const currentUser = DB.getCurrentUser();
             if (currentUser) {
@@ -111,10 +86,8 @@
                     DB.setCurrentUser(freshUser);
                     renderApp();
                 } else {
-                    // Check if message count changed
                     const messages = DB.getMessages();
-                    const lastMsgCount = window._lastMsgCount || 0;
-                    if (messages.length !== lastMsgCount) {
+                    if (messages.length !== (window._lastMsgCount || 0)) {
                         window._lastMsgCount = messages.length;
                         renderApp();
                     }
@@ -122,10 +95,11 @@
             }
         }, 1000);
 
-        let activeTab = 'chats'; // 'chats', 'search', 'requests', 'profile'
-        let activeChatUserId = null;
-        let authMode = 'login'; // 'login' or 'register'
+        let activeTab = 'chats'; // 'chats', 'search', 'requests', 'groups', 'profile'
+        let activeChatId = null; // can be userId or groupId
+        let authMode = 'login';
         let notificationMessage = null;
+        let activeCall = null; // { peerName, type: 'audio'|'video', status: 'calling'|'connected' }
 
         function showNotification(msg, type = 'success') {
             notificationMessage = { text: msg, type };
@@ -138,33 +112,58 @@
             }, 3500);
         }
 
-        // --- RENDER ROUTER ---
+        // Check URL for friendship link auto-action on load: ?add=userId
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const targetId = params.get('add');
+            if (targetId) {
+                window._pendingFriendLinkId = targetId;
+            }
+            renderApp();
+        });
+
         function renderApp() {
             const app = document.getElementById('app');
             const currentUser = DB.getCurrentUser();
 
+            // Check if there is a pending friend link request and user is logged in
+            if (currentUser && window._pendingFriendLinkId) {
+                const targetId = window._pendingFriendLinkId;
+                window._pendingFriendLinkId = null;
+                // Clear URL param without reload
+                window.history.replaceState({}, document.title, window.location.pathname);
+                if (targetId !== currentUser.id) {
+                    autoSendFriendRequest(targetId);
+                }
+            }
+
             if (!currentUser) {
                 app.innerHTML = renderAuthScreen();
-                attachAuthListeners();
                 return;
             }
 
-            // Main Layout with Sidebar + Main Content Area
+            // Apply dark mode class to html element
+            if (currentUser.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+
             app.innerHTML = `
                 ${notificationMessage ? renderToast(notificationMessage) : ''}
+                ${activeCall ? renderCallModal() : ''}
                 <div class="flex h-full w-full overflow-hidden relative">
                     <!-- Sidebar Navigation -->
-                    <aside class="w-20 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 z-20">
-                        <!-- Sidebar Header & Nav -->
+                    <aside class="w-20 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 z-20 transition-colors">
                         <div class="flex flex-col h-full">
                             <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                                 <div class="flex items-center space-x-3 overflow-hidden">
                                     <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0">
-                                        ${currentUser.name.charAt(0).toUpperCase()}
+                                        ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-xl">` : currentUser.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div class="hidden md:block truncate">
                                         <h2 class="font-semibold text-sm truncate">${escapeHtml(currentUser.name)}</h2>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">@${escapeHtml(currentUser.username || currentUser.email)}</p>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">ID: ${currentUser.id}</p>
                                     </div>
                                 </div>
                                 <button onclick="handleLogout()" title="Выйти" class="hidden md:flex text-slate-400 hover:text-red-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -172,15 +171,19 @@
                                 </button>
                             </div>
 
-                            <!-- Navigation Tabs -->
+                            <!-- Tabs Navigation -->
                             <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
                                 <button onclick="switchTab('chats')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'chats' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-comments text-lg w-6 text-center"></i>
                                     <span class="hidden md:inline">Чаты</span>
                                 </button>
+                                <button onclick="switchTab('groups')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'groups' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-users text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Группы / Каналы</span>
+                                </button>
                                 <button onclick="switchTab('search')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'search' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-user-plus text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Найти людей</span>
+                                    <i class="fa-solid fa-link text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Добавить по ссылке</span>
                                 </button>
                                 <button onclick="switchTab('requests')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition relative ${activeTab === 'requests' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-bell text-lg w-6 text-center"></i>
@@ -191,12 +194,11 @@
                                 </button>
                                 <button onclick="switchTab('profile')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
                                     <i class="fa-solid fa-user-gear text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Профиль</span>
+                                    <span class="hidden md:inline">Профиль и Ссылка</span>
                                 </button>
                             </nav>
                         </div>
 
-                        <!-- Mobile Logout -->
                         <div class="p-3 border-t border-slate-200 dark:border-slate-800 md:hidden flex justify-center">
                             <button onclick="handleLogout()" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl">
                                 <i class="fa-solid fa-right-from-bracket text-lg"></i>
@@ -204,17 +206,14 @@
                         </div>
                     </aside>
 
-                    <!-- Main Workspace Area -->
+                    <!-- Main Content Workspace -->
                     <main class="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
                         ${renderMainContent(currentUser)}
                     </main>
                 </div>
             `;
-
-            attachEventListeners(currentUser);
         }
 
-        // --- AUTH SCREENS ---
         function renderAuthScreen() {
             return `
                 <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-950 dark:to-slate-900 p-4">
@@ -224,37 +223,32 @@
                                 <i class="fa-solid fa-bolt"></i>
                             </div>
                             <h1 class="text-2xl font-bold tracking-tight">Xena Messenger</h1>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Реальное общение между зарегистрированными пользователями</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Реальные мультипользовательские чаты с localStorage</p>
                         </div>
 
-                        <!-- Mode Switcher -->
                         <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
-                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'login' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}">
+                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'login' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}">
                                 Вход
                             </button>
-                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'register' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}">
+                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'register' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}">
                                 Регистрация
                             </button>
                         </div>
 
-                        <form id="auth-form" class="space-y-4" onsubmit="handleAuthSubmit(event)">
+                        <form class="space-y-4" onsubmit="handleAuthSubmit(event)">
                             ${authMode === 'register' ? `
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Имя</label>
-                                    <input type="text" id="auth-name" required placeholder="Ваше имя" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 transition">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Логин (@username)</label>
-                                    <input type="text" id="auth-username" required placeholder="example_user" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 transition">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя пользователя</label>
+                                    <input type="text" id="auth-name" required placeholder="Иван Иванов" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
                                 </div>
                             ` : ''}
                             <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Email / Логин</label>
-                                <input type="text" id="auth-email" required placeholder="user@example.com или логин" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 transition">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email или Логин</label>
+                                <input type="text" id="auth-email" required placeholder="user@example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Пароль</label>
-                                <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 transition">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Пароль</label>
+                                <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
                             </div>
 
                             <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition mt-2">
@@ -279,40 +273,35 @@
 
             if (authMode === 'register') {
                 const name = document.getElementById('auth-name').value.trim();
-                const username = document.getElementById('auth-username').value.trim().replace(/^@/, '');
-
-                if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
-                    showNotification('Пользователь с таким логином уже существует!', 'error');
-                    return;
-                }
-
                 if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
                     showNotification('Этот email уже зарегистрирован!', 'error');
                     return;
                 }
 
+                const newUserId = 'u_' + Math.random().toString(36).substr(2, 7);
                 const newUser = {
-                    id: 'user_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                    id: newUserId,
                     name,
-                    username,
                     email,
                     password,
                     bio: 'Привет! Я пользуюсь Xena Messenger.',
-                    friends: [], // array of user IDs
-                    friendRequests: [], // array of user IDs who sent requests
-                    sentRequests: [] // array of user IDs to whom requests were sent
+                    avatar: '',
+                    darkMode: false,
+                    friends: [],
+                    friendRequests: [],
+                    sentRequests: []
                 };
 
                 users.push(newUser);
                 DB.saveUsers(users);
                 DB.setCurrentUser(newUser);
-                showNotification('Регистрация прошла успешно!');
+                showNotification('Регистрация успешна!');
                 renderApp();
             } else {
-                const user = users.find(u => (u.email.toLowerCase() === email.toLowerCase() || u.username.toLowerCase() === email.toLowerCase().replace(/^@/, '')) && u.password === password);
+                const user = users.find(u => (u.email.toLowerCase() === email.toLowerCase() || u.id === email) && u.password === password);
                 if (user) {
                     DB.setCurrentUser(user);
-                    showNotification('Добро пожаловать, ' + user.name + '!');
+                    showNotification('С возвращением, ' + user.name + '!');
                     renderApp();
                 } else {
                     showNotification('Неверный логин или пароль', 'error');
@@ -322,182 +311,216 @@
 
         function handleLogout() {
             DB.setCurrentUser(null);
-            activeChatUserId = null;
+            activeChatId = null;
             activeTab = 'chats';
             showNotification('Вы вышли из системы');
             renderApp();
         }
 
-        // --- MAIN CONTENT ROUTER ---
         function renderMainContent(currentUser) {
-            // Ensure friend lists are arrays
             currentUser.friends = currentUser.friends || [];
             currentUser.friendRequests = currentUser.friendRequests || [];
             currentUser.sentRequests = currentUser.sentRequests || [];
 
             if (activeTab === 'search') {
-                return renderSearchTab(currentUser);
+                return renderLinkSearchTab(currentUser);
             } else if (activeTab === 'requests') {
                 return renderRequestsTab(currentUser);
+            } else if (activeTab === 'groups') {
+                return renderGroupsTab(currentUser);
             } else if (activeTab === 'profile') {
                 return renderProfileTab(currentUser);
             } else {
-                // Chats tab (Split view: chat list left, active chat right)
-                return `
-                    <div class="flex h-full w-full overflow-hidden">
-                        <!-- Chat List Sidebar -->
-                        <div class="${activeChatUserId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-                            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                                <h2 class="font-bold text-lg">Чаты</h2>
-                                <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 px-2.5 py-1 rounded-full font-medium">
-                                    ${currentUser.friends.length} друзей
-                                </span>
-                            </div>
-                            <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
-                                ${currentUser.friends.length === 0 ? `
-                                    <div class="p-8 text-center text-slate-400">
-                                        <i class="fa-solid fa-user-group text-4xl mb-3 opacity-50"></i>
-                                        <p class="text-sm font-medium">У вас пока нет друзей в чатах</p>
-                                        <p class="text-xs mt-1">Найдите пользователей во вкладке "Найти людей"</p>
-                                        <button onclick="switchTab('search')" class="mt-4 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold rounded-xl shadow transition">
-                                            Найти друзей
-                                        </button>
-                                    </div>
-                                ` : currentUser.friends.map(friendId => {
-                                    const users = DB.getUsers();
-                                    const friend = users.find(u => u.id === friendId);
-                                    if (!friend) return '';
-                                    const isSelected = activeChatUserId === friend.id;
-                                    const lastMsg = getLastMessage(currentUser.id, friend.id);
-                                    return `
-                                        <div onclick="openChat('${friend.id}')" class="flex items-center space-x-3 p-4 cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSelected ? 'bg-slate-100 dark:bg-slate-800' : ''}">
-                                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 shadow">
-                                                ${friend.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center justify-between mb-1">
-                                                    <h3 class="font-semibold text-sm truncate">${escapeHtml(friend.name)}</h3>
-                                                    ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
-                                                </div>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                    ${lastMsg ? escapeHtml(lastMsg.text) : '@' + escapeHtml(friend.username)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        </div>
-
-                        <!-- Active Chat Window -->
-                        <div class="${!activeChatUserId ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
-                            ${activeChatUserId ? renderChatWindow(currentUser, activeChatUserId) : `
-                                <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                                    <div class="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-3xl text-slate-400 mb-4 shadow-inner">
-                                        <i class="fa-solid fa-comments"></i>
-                                    </div>
-                                    <h3 class="font-semibold text-lg text-slate-700 dark:text-slate-300">Выберите чат</h3>
-                                    <p class="text-sm max-w-sm mt-1">Выберите друга из списка слева, чтобы начать диалог или найдите нового пользователя.</p>
-                                </div>
-                            `}
-                        </div>
-                    </div>
-                `;
+                return renderChatsTab(currentUser);
+            }
         }
 
-        // --- SEARCH TAB ---
-        function renderSearchTab(currentUser) {
-            const allUsers = DB.getUsers().filter(u => u.id !== currentUser.id);
-            const searchQuery = window._searchQuery || '';
-            
-            const filteredUsers = allUsers.filter(u => 
-                u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                u.email.toLowerCase().includes(searchQuery.toLowerCase())
-            );
+        function renderChatsTab(currentUser) {
+            const groups = DB.getGroups().filter(g => g.members && g.members.includes(currentUser.id));
 
             return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl mb-4">Поиск пользователей</h2>
-                        <div class="relative">
-                            <i class="fa-solid fa-search absolute left-4 top-3.5 text-slate-400"></i>
-                            <input type="text" id="user-search-input" value="${escapeHtml(searchQuery)}" oninput="handleSearchInput(event)" placeholder="Введите имя или @логин пользователя..." class="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
+                <div class="flex h-full w-full overflow-hidden">
+                    <div class="${activeChatId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                            <h2 class="font-bold text-lg">Чаты</h2>
+                            <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 px-2.5 py-1 rounded-full font-medium">
+                                ${currentUser.friends.length + groups.length} диалогов
+                            </span>
                         </div>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                            ${filteredUsers.length === 0 ? `
-                                <div class="col-span-full py-12 text-center text-slate-400">
-                                    <i class="fa-solid fa-user-slash text-4xl mb-3 opacity-50"></i>
-                                    <p class="font-medium">Пользователи не найдены</p>
-                                    <p class="text-xs mt-1">Попробуйте ввести другой запрос или зарегистрировать аккаунт в другом браузере.</p>
+                        <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                            ${(currentUser.friends.length === 0 && groups.length === 0) ? `
+                                <div class="p-8 text-center text-slate-400">
+                                    <i class="fa-solid fa-comments text-4xl mb-3 opacity-50"></i>
+                                    <p class="text-sm font-medium">Список чатов пуст</p>
+                                    <p class="text-xs mt-1">Добавьте друзей по ссылке, чтобы начать общение.</p>
                                 </div>
-                            ` : filteredUsers.map(user => {
-                                const isFriend = currentUser.friends.includes(user.id);
-                                const hasSentRequest = currentUser.sentRequests && currentUser.sentRequests.includes(user.id);
-                                const hasReceivedRequest = currentUser.friendRequests && currentUser.friendRequests.includes(user.id);
+                            ` : ''}
 
-                                let actionBtn = '';
-                                if (isFriend) {
-                                    actionBtn = `<button onclick="openChat('${user.id}')" class="px-4 py-2 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-medium text-xs rounded-xl hover:bg-brand-200 transition"><i class="fa-solid fa-comment mr-1.5"></i> Написать</button>`;
-                                } else if (hasSentRequest) {
-                                    actionBtn = `<span class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-medium rounded-xl">Заявка отправлена</span>`;
-                                } else if (hasReceivedRequest) {
-                                    actionBtn = `<button onclick="switchTab('requests')" class="px-4 py-2 bg-amber-500 text-white font-medium text-xs rounded-xl shadow hover:bg-amber-600 transition"><i class="fa-solid fa-bell mr-1.5"></i> Ответить на заявку</button>`;
-                                } else {
-                                    actionBtn = `<button onclick="sendFriendRequest('${user.id}')" class="px-4 py-2 bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md shadow-brand-500/20 hover:bg-brand-600 transition"><i class="fa-solid fa-user-plus mr-1.5"></i> Добавить в друзья</button>`;
-                                }
-
+                            <!-- Group chats -->
+                            ${groups.map(group => {
+                                const isSelected = activeChatId === group.id;
+                                const lastMsg = getLastGroupMessage(group.id);
                                 return `
-                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-                                        <div class="flex items-center space-x-3 mb-4">
-                                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 shadow">
-                                                ${user.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div class="min-w-0">
-                                                <h3 class="font-semibold text-sm truncate">${escapeHtml(user.name)}</h3>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">@${escapeHtml(user.username)}</p>
-                                            </div>
+                                    <div onclick="openChat('${group.id}', true)" class="flex items-center space-x-3 p-4 cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSelected ? 'bg-slate-100 dark:bg-slate-800' : ''}">
+                                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold shrink-0 shadow">
+                                            <i class="fa-solid fa-users"></i>
                                         </div>
-                                        <p class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                                            ${escapeHtml(user.bio || 'Нет статуса')}
-                                        </p>
-                                        <div class="flex justify-end">
-                                            ${actionBtn}
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <h3 class="font-semibold text-sm truncate">${escapeHtml(group.name)}</h3>
+                                                ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                                ${lastMsg ? escapeHtml(lastMsg.senderName + ': ' + lastMsg.text) : 'Группа'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+
+                            <!-- Direct chats with friends -->
+                            ${currentUser.friends.map(friendId => {
+                                const users = DB.getUsers();
+                                const friend = users.find(u => u.id === friendId);
+                                if (!friend) return '';
+                                const isSelected = activeChatId === friend.id;
+                                const lastMsg = getLastDirectMessage(currentUser.id, friend.id);
+                                return `
+                                    <div onclick="openChat('${friend.id}', false)" class="flex items-center space-x-3 p-4 cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSelected ? 'bg-slate-100 dark:bg-slate-800' : ''}">
+                                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 shadow overflow-hidden">
+                                            ${friend.avatar ? `<img src="${friend.avatar}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <h3 class="font-semibold text-sm truncate">${escapeHtml(friend.name)}</h3>
+                                                ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                                ${lastMsg ? escapeHtml(lastMsg.text) : 'Нет сообщений'}
+                                            </p>
                                         </div>
                                     </div>
                                 `;
                             }).join('')}
                         </div>
                     </div>
+
+                    <div class="${!activeChatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+                        ${activeChatId ? renderActiveChatWindow(currentUser, activeChatId) : `
+                            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                                <div class="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-3xl text-slate-400 mb-4 shadow-inner">
+                                    <i class="fa-solid fa-comments"></i>
+                                </div>
+                                <h3 class="font-semibold text-lg text-slate-700 dark:text-slate-300">Выберите диалог</h3>
+                                <p class="text-sm max-w-sm mt-1">Выберите друга или группу слева, чтобы начать переписку.</p>
+                            </div>
+                        `}
+                    </div>
                 </div>
             `;
         }
 
-        function handleSearchInput(e) {
-            window._searchQuery = e.target.value;
+        function renderLinkSearchTab(currentUser) {
+            const link = `${window.location.origin}${window.location.pathname}?add=${currentUser.id}`;
+            const queryInput = window._linkQuery || '';
+
+            return `
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <h2 class="font-bold text-xl mb-2">Добавить друга по ссылке</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                            Вставьте ссылку на дружбу или введите ID пользователя, чтобы сразу отправить заявку без лишних кнопок.
+                        </p>
+                        <div class="flex gap-2">
+                            <input type="text" id="link-input" value="${escapeHtml(queryInput)}" oninput="handleLinkInput(event)" placeholder="Вставьте ссылку (например ...?add=u_12345) или ID пользователя" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
+                            <button onclick="submitFriendByLink()" class="px-6 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl shadow-md transition shrink-0">
+                                Отправить заявку
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm text-center">
+                            <div class="w-16 h-16 bg-brand-100 dark:bg-brand-900/40 text-brand-600 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-4">
+                                <i class="fa-solid fa-link"></i>
+                            </div>
+                            <h3 class="font-bold text-base mb-1">Ваша личная ссылка на дружбу</h3>
+                            <p class="text-xs text-slate-500 mb-4">Отправьте её другу, и при переходе он автоматически добавит вас в друзья!</p>
+                            
+                            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <input type="text" readonly value="${link}" class="w-full bg-transparent text-xs px-2 text-slate-600 dark:text-slate-300 focus:outline-none select-all">
+                                <button onclick="copyMyFriendLink('${link}')" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition shrink-0">
+                                    <i class="fa-solid fa-copy mr-1"></i> Копировать
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
-        // --- FRIEND REQUEST ACTIONS ---
-        function sendFriendRequest(targetUserId) {
-            let users = DB.getUsers();
-            let currentUser = DB.getCurrentUser();
+        function handleLinkInput(e) {
+            window._linkQuery = e.target.value;
+        }
 
-            const targetUser = users.find(u => u.id === targetUserId);
-            if (!targetUser) {
-                showNotification('Пользователь не найден', 'error');
+        function copyMyFriendLink(link) {
+            const dummy = document.createElement('input');
+            document.body.appendChild(dummy);
+            dummy.value = link;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+            showNotification('Ссылка скопирована в буфер обмена!');
+        }
+
+        function submitFriendByLink() {
+            const query = (window._linkQuery || '').trim();
+            if (!query) {
+                showNotification('Введите ссылку или ID', 'error');
                 return;
             }
 
-            // Update target user's incoming requests
+            let targetId = query;
+            if (query.includes('add=')) {
+                try {
+                    const url = new URL(query.includes('http') ? query : 'http://localhost/?' + query.split('?')[1]);
+                    targetId = url.searchParams.get('add');
+                } catch(e) {
+                    const parts = query.split('add=');
+                    if (parts[1]) targetId = parts[1].split('&')[0];
+                }
+            }
+
+            autoSendFriendRequest(targetId);
+            window._linkQuery = '';
+            renderApp();
+        }
+
+        function autoSendFriendRequest(targetUserId) {
+            let users = DB.getUsers();
+            let currentUser = DB.getCurrentUser();
+
+            if (targetUserId === currentUser.id) {
+                showNotification('Нельзя отправить заявку самому себе!', 'error');
+                return;
+            }
+
+            const targetUser = users.find(u => u.id === targetUserId);
+            if (!targetUser) {
+                showNotification('Пользователь с таким ID или ссылкой не найден в системе!', 'error');
+                return;
+            }
+
+            if (currentUser.friends && currentUser.friends.includes(targetUserId)) {
+                showNotification('Этот пользователь уже у вас в друзьях!', 'error');
+                return;
+            }
+
             targetUser.friendRequests = targetUser.friendRequests || [];
             if (!targetUser.friendRequests.includes(currentUser.id)) {
                 targetUser.friendRequests.push(currentUser.id);
             }
 
-            // Update current user's sent requests
             currentUser.sentRequests = currentUser.sentRequests || [];
             if (!currentUser.sentRequests.includes(targetUser.id)) {
                 currentUser.sentRequests.push(targetUser.id);
@@ -506,11 +529,11 @@
             DB.updateUser(targetUser);
             DB.updateUser(currentUser);
 
-            showNotification('Заявка в друзья отправлена пользователю ' + targetUser.name + '!');
+            showNotification('Заявка пользователю ' + targetUser.name + ' успешно отправлена!');
+            activeTab = 'chats';
             renderApp();
         }
 
-        // --- REQUESTS TAB ---
         function renderRequestsTab(currentUser) {
             const requests = currentUser.friendRequests || [];
 
@@ -518,7 +541,7 @@
                 <div class="flex flex-col h-full overflow-hidden">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                         <h2 class="font-bold text-xl">Заявки в друзья</h2>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Пользователи, которые хотят добавить вас в друзья</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Пользователи, перешедшие по вашей ссылке</p>
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-6">
@@ -527,7 +550,7 @@
                                 <div class="py-16 text-center text-slate-400">
                                     <i class="fa-solid fa-bell-slash text-4xl mb-3 opacity-50"></i>
                                     <p class="font-medium">Нет входящих заявок</p>
-                                    <p class="text-xs mt-1">Когда другой зарегистрированный пользователь отправит вам заявку, она появится здесь.</p>
+                                    <p class="text-xs mt-1">Поделитесь вашей ссылкой на дружбу, чтобы получить заявку.</p>
                                 </div>
                             ` : requests.map(senderId => {
                                 const users = DB.getUsers();
@@ -537,12 +560,12 @@
                                 return `
                                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-sm">
                                         <div class="flex items-center space-x-4">
-                                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 shadow">
-                                                ${sender.name.charAt(0).toUpperCase()}
+                                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 overflow-hidden shadow">
+                                                ${sender.avatar ? `<img src="${sender.avatar}" class="w-full h-full object-cover">` : sender.name.charAt(0).toUpperCase()}
                                             </div>
                                             <div>
                                                 <h3 class="font-semibold text-sm">${escapeHtml(sender.name)}</h3>
-                                                <p class="text-xs text-slate-500 dark:text-slate-400">@${escapeHtml(sender.username)}</p>
+                                                <p class="text-xs text-slate-500">ID: ${sender.id}</p>
                                                 <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">${escapeHtml(sender.bio || '')}</p>
                                             </div>
                                         </div>
@@ -568,19 +591,14 @@
             let currentUser = DB.getCurrentUser();
             const sender = users.find(u => u.id === senderId);
 
-            if (!sender) {
-                showNotification('Пользователь не найден', 'error');
-                return;
-            }
+            if (!sender) return;
 
-            // Add each other to friends
             currentUser.friends = currentUser.friends || [];
             if (!currentUser.friends.includes(sender.id)) currentUser.friends.push(sender.id);
 
             sender.friends = sender.friends || [];
             if (!sender.friends.includes(currentUser.id)) sender.friends.push(currentUser.id);
 
-            // Remove request
             currentUser.friendRequests = currentUser.friendRequests.filter(id => id !== senderId);
             sender.sentRequests = (sender.sentRequests || []).filter(id => id !== currentUser.id);
 
@@ -588,7 +606,7 @@
             DB.updateUser(sender);
 
             showNotification('Вы добавили ' + sender.name + ' в друзья!');
-            activeChatUserId = sender.id;
+            activeChatId = sender.id;
             activeTab = 'chats';
             renderApp();
         }
@@ -609,33 +627,186 @@
             renderApp();
         }
 
-        // --- PROFILE TAB ---
+        function renderGroupsTab(currentUser) {
+            const groups = DB.getGroups();
+
+            return `
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                        <div>
+                            <h2 class="font-bold text-xl">Группы и Каналы</h2>
+                            <p class="text-xs text-slate-500 mt-1">Создавайте публичные группы для общения с несколькими пользователями</p>
+                        </div>
+                        <button onclick="openCreateGroupModal()" class="px-4 py-2.5 bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md hover:bg-brand-600 transition">
+                            <i class="fa-solid fa-plus mr-1.5"></i> Создать группу
+                        </button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+                            ${groups.length === 0 ? `
+                                <div class="col-span-full py-16 text-center text-slate-400">
+                                    <i class="fa-solid fa-users-rectangle text-4xl mb-3 opacity-50"></i>
+                                    <p class="font-medium">Нет созданных групп</p>
+                                    <p class="text-xs mt-1">Нажмите кнопку выше, чтобы создать первую группу.</p>
+                                </div>
+                            ` : groups.map(group => {
+                                const isMember = group.members && group.members.includes(currentUser.id);
+                                return `
+                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                                        <div>
+                                            <div class="flex items-center space-x-3 mb-3">
+                                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold shrink-0 shadow">
+                                                    <i class="fa-solid fa-users"></i>
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <h3 class="font-semibold text-sm truncate">${escapeHtml(group.name)}</h3>
+                                                    <p class="text-xs text-slate-500">${group.members.length} участников</p>
+                                                </div>
+                                            </div>
+                                            <p class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
+                                                ${escapeHtml(group.description || 'Без описания')}
+                                            </p>
+                                        </div>
+                                        <div class="flex justify-end">
+                                            ${isMember ? `
+                                                <button onclick="openChat('${group.id}', true)" class="px-4 py-2 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-medium text-xs rounded-xl hover:bg-brand-200 transition">
+                                                    <i class="fa-solid fa-comment mr-1.5"></i> Открыть чат
+                                                </button>
+                                            ` : `
+                                                <button onclick="joinGroup('${group.id}')" class="px-4 py-2 bg-brand-500 text-white font-medium text-xs rounded-xl shadow hover:bg-brand-600 transition">
+                                                    <i class="fa-solid fa-right-to-bracket mr-1.5"></i> Войти в группу
+                                                </button>
+                                            `}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Group Modal Backdrop -->
+                <div id="create-group-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
+                        <h3 class="font-bold text-lg mb-4">Создать новую группу</h3>
+                        <form onsubmit="handleCreateGroupSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название группы</label>
+                                <input type="text" id="group-name-input" required placeholder="Например: Команда разработки" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Описание</label>
+                                <textarea id="group-desc-input" rows="2" placeholder="О чем эта группа?" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500"></textarea>
+                            </div>
+                            <div class="flex justify-end space-x-2 pt-2">
+                                <button type="button" onclick="closeCreateGroupModal()" class="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl">Отмена</button>
+                                <button type="submit" class="px-4 py-2.5 bg-brand-500 text-white text-xs font-semibold rounded-xl shadow">Создать</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openCreateGroupModal() {
+            const modal = document.getElementById('create-group-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeCreateGroupModal() {
+            const modal = document.getElementById('create-group-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function handleCreateGroupSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('group-name-input').value.trim();
+            const description = document.getElementById('group-desc-input').value.trim();
+            const currentUser = DB.getCurrentUser();
+
+            let groups = DB.getGroups();
+            const newGroup = {
+                id: 'g_' + Math.random().toString(36).substr(2, 7),
+                name,
+                description,
+                adminId: currentUser.id,
+                members: [currentUser.id]
+            };
+
+            groups.push(newGroup);
+            DB.saveGroups(groups);
+            closeCreateGroupModal();
+            showNotification('Группа успешно создана!');
+            activeChatId = newGroup.id;
+            activeTab = 'chats';
+            renderApp();
+        }
+
+        function joinGroup(groupId) {
+            let groups = DB.getGroups();
+            const currentUser = DB.getCurrentUser();
+            groups = groups.map(g => {
+                if (g.id === groupId && !g.members.includes(currentUser.id)) {
+                    g.members.push(currentUser.id);
+                }
+                return g;
+            });
+            DB.saveGroups(groups);
+            showNotification('Вы вошли в группу!');
+            activeChatId = groupId;
+            activeTab = 'chats';
+            renderApp();
+        }
+
         function renderProfileTab(currentUser) {
             return `
                 <div class="flex flex-col h-full overflow-hidden">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl">Настройки профиля</h2>
+                        <h2 class="font-bold text-xl">Профиль и настройки</h2>
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-6">
-                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                            <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя</label>
-                                    <input type="text" id="profile-name" value="${escapeHtml(currentUser.name)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Логин (@username)</label>
-                                    <input type="text" id="profile-username" value="${escapeHtml(currentUser.username)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">О себе (статус)</label>
-                                    <textarea id="profile-bio" rows="3" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">${escapeHtml(currentUser.bio || '')}</textarea>
-                                </div>
-                                <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition">
-                                    Сохранить изменения
-                                </button>
-                            </form>
+                        <div class="max-w-xl mx-auto space-y-6">
+                            <!-- Profile Card -->
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                                <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
+                                    <div class="flex items-center space-x-4 mb-2">
+                                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white text-2xl font-bold overflow-hidden shadow">
+                                            ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover">` : currentUser.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-base">${escapeHtml(currentUser.name)}</h3>
+                                            <p class="text-xs text-slate-500">ID: ${currentUser.id}</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя</label>
+                                        <input type="text" id="profile-name" value="${escapeHtml(currentUser.name)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL аватара (картинки)</label>
+                                        <input type="text" id="profile-avatar" value="${escapeHtml(currentUser.avatar || '')}" placeholder="https://example.com/avatar.jpg" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Статус «О себе»</label>
+                                        <textarea id="profile-bio" rows="2" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">${escapeHtml(currentUser.bio || '')}</textarea>
+                                    </div>
+
+                                    <!-- Theme Toggle -->
+                                    <div class="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-800">
+                                        <div>
+                                            <h4 class="font-semibold text-sm">Темная тема</h4>
+                                            <p class="text-xs text-slate-500">Включить ночной режим интерфейса</p>
+                                        </div>
+                                        <input type="checkbox" id="profile-darkmode" ${currentUser.darkMode ? 'checked' : ''} class="w-5 h-5 accent-brand-500 rounded cursor-pointer">
+                                    </div>
+
+                                    <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg transition">
+                                        Сохранить настройки
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -646,38 +817,64 @@
             e.preventDefault();
             let currentUser = DB.getCurrentUser();
             currentUser.name = document.getElementById('profile-name').value.trim();
-            currentUser.username = document.getElementById('profile-username').value.trim().replace(/^@/, '');
+            currentUser.avatar = document.getElementById('profile-avatar').value.trim();
             currentUser.bio = document.getElementById('profile-bio').value.trim();
+            currentUser.darkMode = document.getElementById('profile-darkmode').checked;
 
             DB.updateUser(currentUser);
             showNotification('Профиль успешно обновлен!');
             renderApp();
         }
 
-        // --- ACTIVE CHAT WINDOW ---
-        function renderChatWindow(currentUser, friendId) {
-            const users = DB.getUsers();
-            const friend = users.find(u => u.id === friendId);
-            if (!friend) return '';
+        function renderActiveChatWindow(currentUser, chatId) {
+            const isGroup = chatId.startsWith('g_');
+            let chatName = '';
+            let chatAvatarOrIcon = '';
+            let isMember = true;
 
-            const messages = getConversationMessages(currentUser.id, friend.id);
+            if (isGroup) {
+                const group = DB.getGroups().find(g => g.id === chatId);
+                if (!group) return '';
+                chatName = group.name;
+                chatAvatarOrIcon = '<i class="fa-solid fa-users"></i>';
+                isMember = group.members.includes(currentUser.id);
+            } else {
+                const users = DB.getUsers();
+                const friend = users.find(u => u.id === chatId);
+                if (!friend) return '';
+                chatName = friend.name;
+                chatAvatarOrIcon = friend.avatar ? `<img src="${friend.avatar}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase();
+            }
+
+            const messages = getConversationMessages(currentUser.id, chatId, isGroup);
 
             return `
                 <div class="flex flex-col h-full bg-white dark:bg-slate-900">
-                    <!-- Chat Header -->
+                    <!-- Chat Top Header -->
                     <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <div class="flex items-center space-x-3">
-                            <button onclick="closeActiveChat()" class="md:hidden text-slate-500 hover:text-slate-800 dark:hover:text-white p-2">
+                            <button onclick="closeActiveChat()" class="md:hidden text-slate-500 hover:text-slate-800 p-2">
                                 <i class="fa-solid fa-arrow-left text-lg"></i>
                             </button>
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shadow">
-                                ${friend.name.charAt(0).toUpperCase()}
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shadow overflow-hidden">
+                                ${chatAvatarOrIcon}
                             </div>
                             <div>
-                                <h3 class="font-semibold text-sm">${escapeHtml(friend.name)}</h3>
-                                <p class="text-xs text-slate-500">@${escapeHtml(friend.username)}</p>
+                                <h3 class="font-semibold text-sm">${escapeHtml(chatName)}</h3>
+                                <p class="text-xs text-slate-500">${isGroup ? 'Групповой чат' : 'В сети'}</p>
                             </div>
                         </div>
+
+                        ${!isGroup ? `
+                            <div class="flex items-center space-x-2">
+                                <button onclick="startCall('${escapeHtml(chatName)}', 'audio')" title="Аудиозвонок" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+                                    <i class="fa-solid fa-phone text-sm"></i>
+                                </button>
+                                <button onclick="startCall('${escapeHtml(chatName)}', 'video')" title="Видеозвонок" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+                                    <i class="fa-solid fa-video text-sm"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
 
                     <!-- Messages Container -->
@@ -685,14 +882,15 @@
                         ${messages.length === 0 ? `
                             <div class="h-full flex flex-col items-center justify-center text-center text-slate-400">
                                 <i class="fa-regular fa-paper-plane text-3xl mb-2 opacity-50"></i>
-                                <p class="text-sm font-medium">Здесь начнется история вашего диалога</p>
-                                <p class="text-xs">Напишите первое сообщение пользователю ${escapeHtml(friend.name)}</p>
+                                <p class="text-sm font-medium">История сообщений пуста</p>
+                                <p class="text-xs">Напишите первое сообщение в этот чат</p>
                             </div>
                         ` : messages.map(msg => {
                             const isMe = msg.senderId === currentUser.id;
                             return `
                                 <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
                                     <div class="max-w-xs md:max-w-md rounded-2xl px-4 py-2.5 shadow-sm ${isMe ? 'bg-brand-500 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-none'}">
+                                        ${isGroup && !isMe ? `<div class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(msg.senderName)}</div>` : ''}
                                         <p class="text-sm break-words">${escapeHtml(msg.text)}</p>
                                         <div class="text-[10px] mt-1 text-right ${isMe ? 'text-brand-100' : 'text-slate-400'}">
                                             ${formatTime(msg.timestamp)}
@@ -704,7 +902,7 @@
                     </div>
 
                     <!-- Message Input Form -->
-                    <form onsubmit="handleSendMessage(event, '${friend.id}')" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2">
+                    <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2">
                         <input type="text" id="chat-input" placeholder="Введите сообщение..." autocomplete="off" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
                         <button type="submit" class="w-12 h-12 bg-brand-500 hover:bg-brand-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-brand-500/20 transition shrink-0">
                             <i class="fa-solid fa-paper-plane text-sm"></i>
@@ -714,18 +912,18 @@
             `;
         }
 
-        function openChat(friendId) {
-            activeChatUserId = friendId;
+        function openChat(chatId, isGroup) {
+            activeChatId = chatId;
             renderApp();
             scrollToBottom();
         }
 
         function closeActiveChat() {
-            activeChatUserId = null;
+            activeChatId = null;
             renderApp();
         }
 
-        function handleSendMessage(e, recipientId) {
+        function handleSendMessage(e, chatId, isGroup) {
             e.preventDefault();
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
@@ -733,9 +931,11 @@
 
             const currentUser = DB.getCurrentUser();
             const newMessage = {
-                id: 'msg_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                id: 'm_' + Math.random().toString(36).substr(2, 7),
                 senderId: currentUser.id,
-                recipientId: recipientId,
+                senderName: currentUser.name,
+                chatId: chatId,
+                isGroup: isGroup,
                 text: text,
                 timestamp: Date.now()
             };
@@ -749,34 +949,77 @@
             scrollToBottom();
         }
 
-        // --- HELPERS ---
-        function switchTab(tab) {
-            activeTab = tab;
-            if (tab !== 'chats') {
-                activeChatUserId = null;
-            }
+        // Call Simulation Modal
+        function startCall(peerName, type) {
+            activeCall = { peerName, type, status: 'calling' };
+            renderApp();
+            setTimeout(() => {
+                if (activeCall) {
+                    activeCall.status = 'connected';
+                    renderApp();
+                }
+            }, 2500);
+        }
+
+        function endCall() {
+            activeCall = null;
             renderApp();
         }
 
-        function getConversationMessages(userId1, userId2) {
-            const messages = DB.getMessages();
-            return messages.filter(m => 
-                (m.senderId === userId1 && m.recipientId === userId2) ||
-                (m.senderId === userId2 && m.recipientId === userId1)
-            ).sort((a, b) => a.timestamp - b.timestamp);
+        function renderCallModal() {
+            return `
+                <div class="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
+                    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center text-white shadow-2xl">
+                        <div class="w-24 h-24 bg-gradient-to-tr from-brand-500 to-emerald-400 rounded-full mx-auto flex items-center justify-center text-3xl font-bold mb-4 shadow-lg animate-pulse">
+                            <i class="fa-solid ${activeCall.type === 'video' ? 'fa-video' : 'fa-phone'}"></i>
+                        </div>
+                        <h3 class="font-bold text-lg mb-1">${escapeHtml(activeCall.peerName)}</h3>
+                        <p class="text-xs text-slate-400 mb-8">${activeCall.status === 'calling' ? 'Вызов...' : 'Разговор идет (Симуляция)'}</p>
+                        
+                        <div class="flex justify-center space-x-4">
+                            <button onclick="endCall()" class="w-14 h-14 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-xl shadow-lg transition">
+                                <i class="fa-solid fa-phone-slash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
-        function getLastMessage(userId1, userId2) {
-            const msgs = getConversationMessages(userId1, userId2);
+        // Helpers
+        function switchTab(tab) {
+            activeTab = tab;
+            if (tab !== 'chats') activeChatId = null;
+            renderApp();
+        }
+
+        function getConversationMessages(userId, chatId, isGroup) {
+            const messages = DB.getMessages();
+            if (isGroup) {
+                return messages.filter(m => m.chatId === chatId).sort((a,b) => a.timestamp - b.timestamp);
+            } else {
+                return messages.filter(m => !m.isGroup && 
+                    ((m.senderId === userId && m.chatId === chatId) || (m.senderId === chatId && m.chatId === userId))
+                ).sort((a,b) => a.timestamp - b.timestamp);
+            }
+        }
+
+        function getLastDirectMessage(userId, friendId) {
+            const msgs = DB.getMessages().filter(m => !m.isGroup && 
+                ((m.senderId === userId && m.chatId === friendId) || (m.senderId === friendId && m.chatId === userId))
+            );
+            return msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        }
+
+        function getLastGroupMessage(groupId) {
+            const msgs = DB.getMessages().filter(m => m.isGroup && m.chatId === groupId);
             return msgs.length > 0 ? msgs[msgs.length - 1] : null;
         }
 
         function scrollToBottom() {
             setTimeout(() => {
                 const container = document.getElementById('messages-container');
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
+                if (container) container.scrollTop = container.scrollHeight;
             }, 50);
         }
 
@@ -791,23 +1034,14 @@
         }
 
         function renderToast(notification) {
-            const bgClass = notification.type === 'error' ? 'bg-red-500' : 'bg-slate-900 dark:bg-slate-800 text-white';
             return `
-                <div class="fixed top-5 right-5 z-50 ${bgClass} text-white px-5 py-3 rounded-2xl shadow-xl flex items-center space-x-3 animate-bounce">
-                    <i class="fa-solid ${notification.type === 'error' ? 'fa-circle-exclamation text-xl' : 'fa-circle-check text-brand-500 text-xl'}"></i>
+                <div class="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center space-x-3 border border-slate-800">
+                    <i class="fa-solid fa-circle-check text-brand-500 text-xl"></i>
                     <span class="text-sm font-medium">${escapeHtml(notification.text)}</span>
                 </div>
             `;
         }
 
-        function attachAuthListeners() {}
-        function attachEventListeners(currentUser) {
-            if (activeChatUserId) {
-                scrollToBottom();
-            }
-        }
-
-        // Initial render on load
         window.onload = function() {
             renderApp();
         };
