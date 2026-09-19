@@ -36,7 +36,7 @@
         #sidebar {
             width: 360px; background: white; border-right: 1px solid #f3e8ff;
             display: flex; flex-direction: column; height: 100%; z-index: 20;
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease; position: relative;
         }
         
         #chat-area {
@@ -52,11 +52,25 @@
         }
         .btn-primary:hover { background: #7e22ce; }
 
-        #call-modal {
-            position: fixed; inset: 0; background: rgba(30, 9, 57, 0.85); backdrop-filter: blur(8px);
+        /* Плавающая кнопка карандаша */
+        .fab-btn {
+            position: absolute; bottom: 20px; right: 20px; width: 50px; height: 50px;
+            background: #9333ea; color: white; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            font-size: 18px; z-index: 30; transition: transform 0.2s, background 0.2s;
+        }
+        .fab-btn:hover { background: #7e22ce; transform: scale(1.05); }
+
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(30, 9, 57, 0.7); backdrop-filter: blur(5px);
             z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem;
         }
-        
+        .modal-card {
+            background: white; border-radius: 1.5rem; width: 100%; max-width: 500px;
+            overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #e9d5ff;
+        }
+
         @media(max-width: 768px) {
             #sidebar { position: absolute; height: 100%; left: 0; top: 0; transform: translateX(0); }
             #sidebar.closed { transform: translateX(-100%); }
@@ -73,7 +87,7 @@
                     X
                 </div>
                 <h1 style="font-size: 1.5rem; font-weight: 700; color: #581c87;">Xena Messenger</h1>
-                <p style="font-size: 0.85rem; color: #7e22ce; opacity: 0.7; margin-top: 4px;">Группы, каналы и звонки</p>
+                <p style="font-size: 0.85rem; color: #7e22ce; opacity: 0.7; margin-top: 4px;">Ваше пространство для общения</p>
             </div>
 
             <div style="display: flex; background: #f3e8ff; padding: 4px; border-radius: 12px; margin-bottom: 1.5rem;">
@@ -103,7 +117,7 @@
     <div id="app-screen">
         <!-- САЙДБАР -->
         <div id="sidebar" class="closed">
-            <!-- Шапка профиля -->
+            <!-- Шапка профиля и настройки (Discord/Telegram стиль) -->
             <div style="padding: 1rem; border-bottom: 1px solid #f3e8ff; display: flex; align-items: center; justify-content: space-between; background: rgba(243,232,255,0.3);">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div id="user-avatar-initials" style="width: 40px; height: 40px; border-radius: 50%; background: #9333ea; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(147,51,234,0.3);">U</div>
@@ -112,26 +126,35 @@
                         <span style="font-size: 11px; color: #10b981; display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; display: inline-block;"></span> в сети</span>
                     </div>
                 </div>
-                <button onclick="logout()" title="Выйти" style="color: #cbd5e1; padding: 8px; border-radius: 8px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#cbd5e1'"><i class="fa-solid fa-right-from-bracket"></i></button>
-            </div>
-
-            <!-- Вкладки: Все / Группы / Каналы -->
-            <div style="display: flex; padding: 8px 12px; gap: 6px; border-bottom: 1px solid #f3e8ff;">
-                <button onclick="switchTab('all')" id="tab-all" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 8px; background: #9333ea; color: white;">Все</button>
-                <button onclick="switchTab('groups')" id="tab-groups" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 8px; background: #faf5ff; color: #7e22ce;">Группы</button>
-                <button onclick="switchTab('channels')" id="tab-channels" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 8px; background: #faf5ff; color: #7e22ce;">Каналы</button>
-            </div>
-
-            <!-- Поиск людей, групп и каналов по имени -->
-            <div style="padding: 12px; border-bottom: 1px solid #f3e8ff;">
-                <div style="position: relative;">
-                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 12px; color: #c084fc; font-size: 13px;"></i>
-                    <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Поиск по имени (человек, группа)..." style="width: 100%; padding: 10px 10px 10px 38px; background: #faf5ff; border-radius: 10px; border: 1px solid #e9d5ff; font-size: 13px;">
+                <div style="display: flex; gap: 4px;">
+                    <button onclick="openSettingsModal()" title="Настройки" style="color: #9333ea; padding: 8px; border-radius: 8px;" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='transparent'"><i class="fa-solid fa-gear"></i></button>
+                    <button onclick="logout()" title="Выйти" style="color: #cbd5e1; padding: 8px; border-radius: 8px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#cbd5e1'"><i class="fa-solid fa-right-from-bracket"></i></button>
                 </div>
             </div>
 
-            <!-- Список комнат/каналов -->
+            <!-- Вкладки: Все / Группы / Каналы / Заявки -->
+            <div style="display: flex; padding: 8px 12px; gap: 4px; border-bottom: 1px solid #f3e8ff;">
+                <button onclick="switchTab('all')" id="tab-all" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: #9333ea; color: white;">Чаты</button>
+                <button onclick="switchTab('groups')" id="tab-groups" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: #faf5ff; color: #7e22ce;">Группы</button>
+                <button onclick="switchTab('channels')" id="tab-channels" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: #faf5ff; color: #7e22ce;">Каналы</button>
+                <button onclick="switchTab('requests')" id="tab-requests" style="flex: 1; padding: 6px; font-size: 10px; font-weight: 600; border-radius: 8px; background: #faf5ff; color: #7e22ce; position: relative;">Заявки <span id="badge-requests" style="position: absolute; top: 2px; right: 2px; background: #ef4444; color: white; width: 6px; height: 6px; border-radius: 50%;"></span></button>
+            </div>
+
+            <!-- Поиск людей, групп и каналов -->
+            <div style="padding: 12px; border-bottom: 1px solid #f3e8ff;">
+                <div style="position: relative;">
+                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 12px; color: #c084fc; font-size: 13px;"></i>
+                    <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Поиск или добавить в друзья..." style="width: 100%; padding: 10px 10px 10px 38px; background: #faf5ff; border-radius: 10px; border: 1px solid #e9d5ff; font-size: 13px;">
+                </div>
+            </div>
+
+            <!-- Список комнат / заявок -->
             <div id="rooms-list" style="flex: 1; overflow-y: auto;"></div>
+
+            <!-- Кнопка-карандаш (создать группу/канал) -->
+            <button onclick="openCreateModal()" class="fab-btn" title="Создать канал или группу">
+                <i class="fa-solid fa-pen"></i>
+            </button>
         </div>
 
         <!-- ОКНО ЧАТА / КАНАЛА -->
@@ -145,23 +168,27 @@
                         <span id="active-room-dot" style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: #10b981; border: 2px solid white;"></span>
                     </div>
                     <div>
-                        <h4 id="active-room-name" style="font-size: 14px; font-weight: 700; color: #581c87;">Выберите комнату</h4>
-                        <span id="active-room-info" style="font-size: 11px; color: #7e22ce; opacity: 0.6;">участников: 0</span>
+                        <h4 id="active-room-name" style="font-size: 14px; font-weight: 700; color: #581c87;">Выберите или создайте чат</h4>
+                        <span id="active-room-info" style="font-size: 11px; color: #7e22ce; opacity: 0.6;">пусто</span>
                     </div>
                 </div>
                 
-                <!-- Кнопки звонков (скрываются если это канал) -->
-                <div id="call-buttons-container" style="display: flex; gap: 8px;">
+                <div id="call-buttons-container" style="display: none; gap: 8px;">
                     <button onclick="startCall('audio')" style="width: 38px; height: 38px; border-radius: 10px; background: #faf5ff; color: #9333ea; display: flex; align-items: center; justify-content: center;" title="Аудиозвонок"><i class="fa-solid fa-phone" style="font-size: 13px;"></i></button>
                     <button onclick="startCall('video')" style="width: 38px; height: 38px; border-radius: 10px; background: #faf5ff; color: #9333ea; display: flex; align-items: center; justify-content: center;" title="Видеозвонок"><i class="fa-solid fa-video" style="font-size: 13px;"></i></button>
                 </div>
             </div>
 
             <!-- Список сообщений -->
-            <div id="messages-container" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 12px;"></div>
+            <div id="messages-container" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center;">
+                <div style="text-align: center; color: #a855f7; opacity: 0.6;">
+                    <i class="fa-regular fa-comments" style="font-size: 48px; margin-bottom: 8px;"></i>
+                    <p style="font-size: 14px;">Выберите чат слева или нажмите на карандаш, чтобы начать</p>
+                </div>
+            </div>
 
             <!-- Панель отправки файлов и сообщений -->
-            <div id="input-area-wrapper" style="padding: 12px; background: white; border-top: 1px solid #f3e8ff; display: flex; align-items: center; gap: 8px;">
+            <div id="input-area-wrapper" style="padding: 12px; background: white; border-top: 1px solid #f3e8ff; display: none; align-items: center; gap: 8px;">
                 <input type="file" id="file-input" style="display: none;" onchange="handleFileSelect(event)">
                 <button onclick="document.getElementById('file-input').click()" style="color: #c084fc; padding: 8px;" title="Прикрепить файл"><i class="fa-solid fa-paperclip" style="font-size: 18px;"></i></button>
                 <input type="text" id="message-input" onkeydown="if(event.key==='Enter') sendMessage()" placeholder="Написать сообщение..." style="flex: 1; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 10px 14px; font-size: 13px;">
@@ -170,8 +197,59 @@
         </div>
     </div>
 
+    <!-- МОДАЛЬНОЕ ОКНО: СОЗДАТЬ КАНАЛ ИЛИ ГРУППУ -->
+    <div id="create-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="padding: 1.5rem;">
+            <h3 style="font-size: 16px; font-weight: 700; color: #581c87; margin-bottom: 1rem;"><i class="fa-solid fa-pen-nib"></i> Создать новое</h3>
+            <div style="display: flex; gap: 8px; margin-bottom: 1rem;">
+                <button onclick="setCreationType('group')" id="create-btn-group" style="flex: 1; padding: 10px; border-radius: 10px; background: #9333ea; color: white; font-weight: 600; font-size: 12px;">Группа</button>
+                <button onclick="setCreationType('channel')" id="create-btn-channel" style="flex: 1; padding: 10px; border-radius: 10px; background: #faf5ff; color: #7e22ce; font-weight: 600; font-size: 12px;">Канал</button>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #581c87; margin-bottom: 4px;">Название</label>
+                <input type="text" id="new-room-name" placeholder="Например: Проекты Xena" style="width: 100%; padding: 10px; border-radius: 10px; background: #faf5ff; border: 1px solid #e9d5ff; font-size: 13px;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button onclick="closeCreateModal()" style="padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #7e22ce;">Отмена</button>
+                <button onclick="confirmCreateRoom()" class="btn-primary" style="width: auto; padding: 8px 20px; font-size: 12px;">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: НАСТРОЙКИ (Discord/Telegram стиль) -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="padding: 1.5rem; max-width: 450px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #581c87;"><i class="fa-solid fa-gear"></i> Настройки профиля</h3>
+                <button onclick="closeSettingsModal()" style="color: #9333ea;"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="text-align: center; margin-bottom: 4px;">
+                    <div id="settings-avatar-preview" style="width: 70px; height: 70px; border-radius: 50%; background: #9333ea; color: white; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; box-shadow: 0 4px 10px rgba(147,51,234,0.3);">U</div>
+                    <span style="font-size: 11px; color: #7e22ce; opacity: 0.7;">Аккаунт Xena</span>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #581c87; margin-bottom: 4px;">Отображаемое имя</label>
+                    <input type="text" id="settings-name" style="width: 100%; padding: 10px; border-radius: 10px; background: #faf5ff; border: 1px solid #e9d5ff; font-size: 13px;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #581c87; margin-bottom: 4px;">Статус / О себе</label>
+                    <input type="text" id="settings-status" value="В сети и готов к общению" style="width: 100%; padding: 10px; border-radius: 10px; background: #faf5ff; border: 1px solid #e9d5ff; font-size: 13px;">
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 4px;">
+                    <span style="font-size: 13px; font-weight: 600; color: #581c87;">Звуки уведомлений</span>
+                    <input type="checkbox" checked style="accent-color: #9333ea; width: 16px; height: 16px;">
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 1.5rem;">
+                <button onclick="closeSettingsModal()" style="padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #7e22ce;">Отмена</button>
+                <button onclick="saveSettings()" class="btn-primary" style="width: auto; padding: 8px 20px; font-size: 12px;">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
     <!-- МОДАЛКА ЗВОНКОВ -->
-    <div id="call-modal" class="hidden">
+    <div id="call-modal" class="modal-overlay hidden">
         <div style="background: white; border-radius: 1.5rem; width: 100%; max-width: 650px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e9d5ff;">
             <div style="padding: 12px 1rem; background: #581c87; color: white; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -185,10 +263,6 @@
                 <video id="remote-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
                 <div style="position: absolute; bottom: 16px; right: 16px; width: 110px; height: 140px; background: #1e293b; border-radius: 10px; overflow: hidden; border: 2px solid #9333ea;">
                     <video id="local-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-                </div>
-                <div id="call-avatar-placeholder" style="position: absolute; inset: 0; background: #3b0764; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;" class="hidden">
-                    <div style="width: 80px; height: 80px; border-radius: 50%; background: #9333ea; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin-bottom: 12px;">X</div>
-                    <p style="font-size: 13px; color: #e9d5ff;">Подключение к Xena...</p>
                 </div>
             </div>
 
@@ -206,23 +280,18 @@
             document.getElementById('sidebar-toggle-btn').style.display = 'block';
         }
 
-        // Данные групп и каналов
-        let rooms = [
-            { id: 1, type: 'group', name: 'Xena Общий Чат', avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150', info: 'участников: 1,240', messages: [
-                { sender: 'Ана Соколова', text: 'Всем привет в новом обновлении Xena!', time: '10:42', file: null }
-            ]},
-            { id: 2, type: 'group', name: 'Разработчики WebRTC', avatar: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=150', info: 'участников: 48', messages: [
-                { sender: 'Максим', text: 'Звонки работают отлично в группах.', time: 'Вчера', file: null }
-            ]},
-            { id: 3, type: 'channel', name: 'Новости Xena News', avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150', info: 'писчиков: 5,900', messages: [
-                { sender: 'Админ', text: 'Вышло обновление: добавлены каналы, группы и отправка файлов!', time: '12:00', file: null }
-            ]}
+        // Абсолютно пустые массивы при старте
+        let rooms = [];
+        let friendRequests = [
+            { id: 1, name: 'Ана Соколова', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' },
+            { id: 2, name: 'Максим Техник', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }
         ];
 
-        let activeRoomId = 1;
+        let activeRoomId = null;
         let currentTab = 'all';
         let searchQuery = '';
         let currentUser = null;
+        let creationType = 'group';
         let localStream = null;
         let callTimerInterval = null;
         let secondsElapsed = 0;
@@ -265,8 +334,7 @@
             document.getElementById('auth-screen').classList.add('hidden');
             document.getElementById('current-user-name').innerText = currentUser.name;
             document.getElementById('user-avatar-initials').innerText = currentUser.name.charAt(0).toUpperCase();
-            renderRooms();
-            selectRoom(rooms[0].id);
+            renderSidebarContent();
         }
 
         function logout() {
@@ -276,7 +344,7 @@
 
         function switchTab(tab) {
             currentTab = tab;
-            ['all', 'groups', 'channels'].forEach(t => {
+            ['all', 'groups', 'channels', 'requests'].forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 if (t === tab) {
                     btn.style.background = '#9333ea';
@@ -286,37 +354,63 @@
                     btn.style.color = '#7e22ce';
                 }
             });
-            renderRooms();
+            renderSidebarContent();
         }
 
         function handleSearch(val) {
             searchQuery = val.toLowerCase();
-            renderRooms();
+            renderSidebarContent();
         }
 
-        function renderRooms() {
+        function renderSidebarContent() {
             const list = document.getElementById('rooms-list');
             list.innerHTML = '';
+
+            // Если открыта вкладка заявок в друзья
+            if (currentTab === 'requests') {
+                if (friendRequests.length === 0) {
+                    list.innerHTML = `<div style="padding: 2rem; text-align: center; font-size: 12px; color: #7e22ce; opacity: 0.6;">Нет новых заявок</div>`;
+                    document.getElementById('badge-requests').style.display = 'none';
+                    return;
+                }
+                document.getElementById('badge-requests').style.display = 'block';
+                friendRequests.forEach(req => {
+                    const div = document.createElement('div');
+                    div.style.cssText = `padding: 10px 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #faf5ff;`;
+                    div.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${req.avatar}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
+                            <span style="font-size: 13px; font-weight: 600; color: #581c87;">${req.name}</span>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="acceptRequest(${req.id})" style="background: #10b981; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-check"></i></button>
+                            <button onclick="rejectRequest(${req.id})" style="background: #ef4444; color: white; width: 28px; height: 28px; border-radius: 6px; font-size: 11px;"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+                return;
+            }
             
+            // Фильтрация комнат
             let filtered = rooms.filter(r => {
                 const matchesTab = currentTab === 'all' || r.type === (currentTab === 'groups' ? 'group' : 'channel');
                 const matchesSearch = r.name.toLowerCase().includes(searchQuery);
                 return matchesTab && matchesSearch;
             });
 
-            // Если поиск по имени дал результат, или введен новый человек, добавим динамический элемент поиска
-            if(searchQuery && filtered.length === 0) {
+            if (filtered.length === 0) {
                 list.innerHTML = `
-                    <div style="padding: 1.5rem; text-align: center; color: #7e22ce;">
-                        <p style="font-size: 13px; margin-bottom: 8px;">Пользователь или группа "${searchQuery}" не найдены.</p>
-                        <button onclick="createNewContact('${searchQuery}')" style="background: #9333ea; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">Создать чат/группу с "${searchQuery}"</button>
+                    <div style="padding: 3rem 1rem; text-align: center; color: #7e22ce; opacity: 0.6;">
+                        <p style="font-size: 13px; margin-bottom: 8px;">Список пуст</p>
+                        <p style="font-size: 11px;">Нажмите на значок карандаша внизу, чтобы создать группу или канал.</p>
                     </div>
                 `;
                 return;
             }
 
             filtered.forEach(room => {
-                const lastMsg = room.messages[room.messages.length - 1] || { text: '', time: '' };
+                const lastMsg = room.messages[room.messages.length - 1] || { text: 'Нет сообщений', time: '' };
                 const isActive = room.id === activeRoomId;
                 
                 const div = document.createElement('div');
@@ -340,19 +434,76 @@
             });
         }
 
-        function createNewContact(name) {
+        function acceptRequest(id) {
+            const req = friendRequests.find(r => r.id === id);
+            friendRequests = friendRequests.filter(r => r.id !== id);
+            // Создаем личный чат
             const newRoom = {
                 id: Date.now(),
                 type: 'group',
-                name: name.charAt(0).toUpperCase() + name.slice(1),
-                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                info: 'участников: 2',
-                messages: [{ sender: 'Система', text: `Создан диалог с ${name}`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
+                name: req.name,
+                avatar: req.avatar,
+                info: 'в сети',
+                messages: [{ sender: req.name, text: 'Привет! Мы теперь в контактах Xena.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
             };
             rooms.push(newRoom);
-            document.getElementById('search-input').value = '';
-            searchQuery = '';
+            renderSidebarContent();
             selectRoom(newRoom.id);
+        }
+
+        function rejectRequest(id) {
+            friendRequests = friendRequests.filter(r => r.id !== id);
+            renderSidebarContent();
+        }
+
+        // Управление модалкой создания канала/группы
+        function openCreateModal() { document.getElementById('create-modal').classList.remove('hidden'); }
+        function closeCreateModal() { document.getElementById('create-modal').classList.add('hidden'); document.getElementById('new-room-name').value = ''; }
+        
+        function setCreationType(type) {
+            creationType = type;
+            document.getElementById('create-btn-group').style.background = type === 'group' ? '#9333ea' : '#faf5ff';
+            document.getElementById('create-btn-group').style.color = type === 'group' ? 'white' : '#7e22ce';
+            document.getElementById('create-btn-channel').style.background = type === 'channel' ? '#9333ea' : '#faf5ff';
+            document.getElementById('create-btn-channel').style.color = type === 'channel' ? 'white' : '#7e22ce';
+        }
+
+        function confirmCreateRoom() {
+            const name = document.getElementById('new-room-name').value.trim();
+            if(!name) return;
+
+            const newRoom = {
+                id: Date.now(),
+                type: creationType,
+                name: name,
+                avatar: creationType === 'group' ? 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150' : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+                info: creationType === 'group' ? 'участников: 1' : 'подписчиков: 1',
+                messages: [{ sender: 'Система', text: `Создан ${creationType === 'group' ? 'групповой чат' : 'канал'} "${name}"`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), file: null }]
+            };
+
+            rooms.push(newRoom);
+            closeCreateModal();
+            switchTab(creationType === 'group' ? 'groups' : 'channels');
+            selectRoom(newRoom.id);
+        }
+
+        // Настройки профиля (Discord/Telegram стиль)
+        function openSettingsModal() {
+            document.getElementById('settings-name').value = currentUser.name;
+            document.getElementById('settings-avatar-preview').innerText = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+        function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
+        
+        function saveSettings() {
+            const newName = document.getElementById('settings-name').value.trim();
+            if(newName) {
+                currentUser.name = newName;
+                localStorage.setItem('xena_user', JSON.stringify(currentUser));
+                document.getElementById('current-user-name').innerText = newName;
+                document.getElementById('user-avatar-initials').innerText = newName.charAt(0).toUpperCase();
+            }
+            closeSettingsModal();
         }
 
         function selectRoom(id) {
@@ -362,8 +513,8 @@
             document.getElementById('active-room-name').innerText = room.name;
             document.getElementById('active-room-avatar').src = room.avatar;
             document.getElementById('active-room-info').innerText = room.info;
+            document.getElementById('input-area-wrapper').style.display = 'flex';
             
-            // Если это канал, скрываем кнопки звонков и заменяем плашку ввода для каналов (писать могут только админы)
             const callBtns = document.getElementById('call-buttons-container');
             if(room.type === 'channel') {
                 callBtns.style.display = 'none';
@@ -372,16 +523,14 @@
             }
 
             renderMessages();
-            renderRooms();
+            renderSidebarContent();
             
             if(window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.add('closed');
             }
         }
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('closed');
-        }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
 
         function renderMessages() {
             const container = document.getElementById('messages-container');
@@ -391,7 +540,7 @@
             room.messages.forEach(msg => {
                 const isMe = msg.sender === currentUser.name;
                 const wrapper = document.createElement('div');
-                wrapper.style.cssText = `display: flex; flex-direction: column; align-items: ${isMe ? 'flex-end' : 'flex-start'};`;
+                wrapper.style.cssText = `display: flex; flex-direction: column; align-items: ${isMe ? 'flex-end' : 'flex-start'}; width: 100%;`;
                 
                 let fileHtml = '';
                 if(msg.file) {
@@ -426,10 +575,9 @@
             room.messages.push({ sender: currentUser.name, text: text, time: timeNow, file: null });
             input.value = '';
             renderMessages();
-            renderRooms();
+            renderSidebarContent();
         }
 
-        // Отправка файлов
         function handleFileSelect(event) {
             const file = event.target.files[0];
             if(!file) return;
@@ -441,15 +589,15 @@
                 
                 room.messages.push({
                     sender: currentUser.name,
-                    text: `Отправил файл: ${file.name}`,
+                    text: `Файл: ${file.name}`,
                     time: timeNow,
                     file: { name: file.name, type: file.type, url: e.target.result }
                 });
                 renderMessages();
-                renderRooms();
+                renderSidebarContent();
             };
             reader.readAsDataURL(file);
-            event.target.value = ''; // сброс
+            event.target.value = '';
         }
 
         // ЗВОНКИ WebRTC
@@ -472,9 +620,8 @@
                 localStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
                 document.getElementById('local-video').srcObject = localStream;
                 document.getElementById('remote-video').srcObject = localStream;
-                document.getElementById('call-avatar-placeholder').classList.add('hidden');
             } catch (err) {
-                document.getElementById('call-avatar-placeholder').classList.remove('hidden');
+                console.warn('Медиа устройство недоступно');
             }
         }
 
