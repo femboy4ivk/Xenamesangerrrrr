@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xena Messenger</title>
+    <title>Xena Messenger (Cloud Synced)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -31,59 +31,166 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 9999px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.8); }
+        .hide-scroll::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden transition-colors duration-200">
 
-    <div id="app" class="h-full w-full flex flex-col"></div>
+    <div id="app" class="h-full w-full flex flex-col items-center justify-center">
+        <!-- Loading Screen while Firebase initializes -->
+        <div class="animate-pulse flex flex-col items-center space-y-4">
+            <div class="w-16 h-16 bg-brand-500 rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-brand-500/30">
+                <i class="fa-solid fa-bolt"></i>
+            </div>
+            <p class="text-slate-500 font-medium">Подключение к облаку...</p>
+        </div>
+    </div>
 
-    <script>
-        const DB = {
-            getUsers() {
-                try { return JSON.parse(localStorage.getItem('xena_users')) || []; } catch(e){ return []; }
-            },
-            saveUsers(users) { localStorage.setItem('xena_users', JSON.stringify(users)); },
-            getCurrentUser() {
-                try { return JSON.parse(localStorage.getItem('xena_current_user')) || null; } catch(e){ return null; }
-            },
-            setCurrentUser(user) {
-                if (user) localStorage.setItem('xena_current_user', JSON.stringify(user));
-                else localStorage.removeItem('xena_current_user');
-            },
-            getMessages() {
-                try { return JSON.parse(localStorage.getItem('xena_messages')) || []; } catch(e){ return []; }
-            },
-            saveMessages(messages) { localStorage.setItem('xena_messages', JSON.stringify(messages)); },
-            getGroups() {
-                try { return JSON.parse(localStorage.getItem('xena_groups')) || []; } catch(e){ return []; }
-            },
-            saveGroups(groups) { localStorage.setItem('xena_groups', JSON.stringify(groups)); },
-            getStickers() {
-                try { 
-                    const custom = JSON.parse(localStorage.getItem('xena_stickers')) || [];
-                    // Default built-in stickers
-                    const defaults = [
-                        { id: 'st_1', name: 'Огонь', url: 'https://placehold.co/120x120/22c55e/ffffff?text=🔥' },
-                        { id: 'st_2', name: 'Сердце', url: 'https://placehold.co/120x120/ef4444/ffffff?text=❤️' },
-                        { id: 'st_3', name: 'Смех', url: 'https://placehold.co/120x120/eab308/ffffff?text=😂' },
-                        { id: 'st_4', name: 'Палец вверх', url: 'https://placehold.co/120x120/3b82f6/ffffff?text=👍' },
-                        { id: 'st_5', name: 'Ракета', url: 'https://placehold.co/120x120/a855f7/ffffff?text=🚀' },
-                        { id: 'st_6', name: 'Единорог', url: 'https://placehold.co/120x120/ec4899/ffffff?text=🦄' }
-                    ];
-                    return [...defaults, ...custom];
-                } catch(e){ return []; }
-            },
-            saveSticker(sticker) {
-                try {
-                    const custom = JSON.parse(localStorage.getItem('xena_stickers')) || [];
-                    custom.push(sticker);
-                    localStorage.setItem('xena_stickers', JSON.stringify(custom));
-                } catch(e){}
-            },
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'xena-messenger-v1';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            projectId: "demo-project",
+            apiKey: "demo-key" // Default mock config for local environments without config
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Global State connected to Firebase
+        window.AppState = {
+            users: [],
+            messages: [],
+            groups: [],
+            stickers: [
+                // Default built-in stickers
+                { id: 'st_1', name: 'Огонь', url: 'https://placehold.co/120x120/22c55e/ffffff?text=🔥' },
+                { id: 'st_2', name: 'Сердце', url: 'https://placehold.co/120x120/ef4444/ffffff?text=❤️' },
+                { id: 'st_3', name: 'Смех', url: 'https://placehold.co/120x120/eab308/ffffff?text=😂' }
+            ],
+            currentUser: null,
+            activeTab: 'chats',
+            activeChatId: null,
+            authMode: 'login',
+            notificationMessage: null,
+            activeCall: null,
+            isStickersOpen: false,
+            linkQuery: '',
+            pendingFriendLinkId: null
+        };
+
+        // UI Helpers
+        window.showNotification = (msg, type = 'success') => {
+            window.AppState.notificationMessage = { text: msg, type };
+            window.renderApp();
+            setTimeout(() => {
+                if (window.AppState.notificationMessage && window.AppState.notificationMessage.text === msg) {
+                    window.AppState.notificationMessage = null;
+                    window.renderApp();
+                }
+            }, 3500);
+        };
+
+        window.formatTime = (timestamp) => {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        };
+
+        window.escapeHtml = (str) => {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        };
+
+        window.scrollToBottom = () => {
+            setTimeout(() => {
+                const container = document.getElementById('messages-container');
+                if (container) container.scrollTop = container.scrollHeight;
+            }, 50);
+        };
+
+        const publicPath = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
+        const publicDoc = (col, docId) => doc(db, 'artifacts', appId, 'public', 'data', col, String(docId));
+
+        async function initAuthAndData() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Check for saved login session in localStorage
+                const savedId = localStorage.getItem('xena_saved_user_id');
+
+                // Start real-time listeners (fetching all docs without complex queries)
+                onSnapshot(publicPath('users'), (snapshot) => {
+                    const users = [];
+                    snapshot.forEach(doc => users.push(doc.data()));
+                    window.AppState.users = users;
+
+                    if (savedId && !window.AppState.currentUser) {
+                        const user = users.find(u => u.id === savedId);
+                        if (user) window.AppState.currentUser = user;
+                    } else if (window.AppState.currentUser) {
+                        // Refresh current user data if updated externally
+                        const freshUser = users.find(u => u.id === window.AppState.currentUser.id);
+                        if (freshUser) window.AppState.currentUser = freshUser;
+                    }
+                    
+                    window.renderApp();
+                }, (error) => console.error("Users listener error:", error));
+
+                onSnapshot(publicPath('messages'), (snapshot) => {
+                    const messages = [];
+                    snapshot.forEach(doc => messages.push({ ...doc.data(), docId: doc.id }));
+                    window.AppState.messages = messages;
+                    window.renderApp();
+                    window.scrollToBottom();
+                }, (error) => console.error("Messages listener error:", error));
+
+                onSnapshot(publicPath('groups'), (snapshot) => {
+                    const groups = [];
+                    snapshot.forEach(doc => groups.push(doc.data()));
+                    window.AppState.groups = groups;
+                    window.renderApp();
+                }, (error) => console.error("Groups listener error:", error));
+
+                onSnapshot(publicPath('stickers'), (snapshot) => {
+                    const cloudStickers = [];
+                    snapshot.forEach(doc => cloudStickers.push(doc.data()));
+                    
+                    // Merge default and cloud stickers
+                    const defaultIds = ['st_1', 'st_2', 'st_3'];
+                    const allStickers = [...window.AppState.stickers.filter(s => defaultIds.includes(s.id)), ...cloudStickers];
+                    window.AppState.stickers = allStickers;
+                    window.renderApp();
+                }, (error) => console.error("Stickers listener error:", error));
+
+                // Process pending links from URL on load
+                const params = new URLSearchParams(window.location.search);
+                const targetId = params.get('add');
+                if (targetId) {
+                    window.AppState.pendingFriendLinkId = targetId;
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+
+            } catch (err) {
+                console.error("Auth/DB Init Error:", err);
+                document.getElementById('app').innerHTML = `<div class="p-8 text-red-500 text-center">Ошибка подключения к облаку.</div>`;
+            }
+        }
+
+        // Initialize App
+        initAuthAndData();
+
+        window.DB = {
             getNextUserId() {
-                const users = this.getUsers();
+                const users = window.AppState.users;
                 if (users.length === 0) return '0000000001';
-                // Find max ID converted to integer
                 let maxId = 0;
                 users.forEach(u => {
                     const num = parseInt(u.id, 10);
@@ -92,545 +199,148 @@
                 const nextNum = maxId + 1;
                 return String(nextNum).padStart(10, '0');
             },
-            updateUser(updatedUser) {
-                let users = this.getUsers();
-                users = users.map(u => u.id === updatedUser.id ? updatedUser : u);
-                this.saveUsers(users);
-                const curr = this.getCurrentUser();
-                if (curr && curr.id === updatedUser.id) {
-                    this.setCurrentUser(updatedUser);
-                }
-            }
-        };
-
-        // Cross-tab synchronization via storage events and polling
-        window.addEventListener('storage', (e) => {
-            if (['xena_users', 'xena_messages', 'xena_groups', 'xena_current_user', 'xena_stickers'].includes(e.key)) {
-                renderApp();
-            }
-        });
-
-        setInterval(() => {
-            const currentUser = DB.getCurrentUser();
-            if (currentUser) {
-                const users = DB.getUsers();
-                const freshUser = users.find(u => u.id === currentUser.id);
-                if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(currentUser)) {
-                    DB.setCurrentUser(freshUser);
-                    renderApp();
-                } else {
-                    const messages = DB.getMessages();
-                    if (messages.length !== (window._lastMsgCount || 0)) {
-                        window._lastMsgCount = messages.length;
-                        renderApp();
-                    }
-                }
-            }
-        }, 1000);
-
-        let activeTab = 'chats'; // 'chats', 'search', 'requests', 'groups', 'stickers', 'profile'
-        let activeChatId = null; 
-        let authMode = 'login';
-        let notificationMessage = null;
-        let activeCall = null; 
-        let isStickersOpen = false; // toggle sticker picker in chat
-
-        function showNotification(msg, type = 'success') {
-            notificationMessage = { text: msg, type };
-            renderApp();
-            setTimeout(() => {
-                if (notificationMessage && notificationMessage.text === msg) {
-                    notificationMessage = null;
-                    renderApp();
-                }
-            }, 3500);
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            const targetId = params.get('add');
-            if (targetId) {
-                window._pendingFriendLinkId = targetId;
-            }
-            renderApp();
-        });
-
-        function renderApp() {
-            const app = document.getElementById('app');
-            const currentUser = DB.getCurrentUser();
-
-            if (currentUser && window._pendingFriendLinkId) {
-                const targetId = window._pendingFriendLinkId;
-                window._pendingFriendLinkId = null;
-                window.history.replaceState({}, document.title, window.location.pathname);
-                if (targetId !== currentUser.id) {
-                    autoSendFriendRequest(targetId);
-                }
-            }
-
-            if (!currentUser) {
-                app.innerHTML = renderAuthScreen();
-                return;
-            }
-
-            if (currentUser.darkMode) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-
-            app.innerHTML = `
-                ${notificationMessage ? renderToast(notificationMessage) : ''}
-                ${activeCall ? renderCallModal() : ''}
-                <div class="flex h-full w-full overflow-hidden relative">
-                    <!-- Sidebar Navigation -->
-                    <aside class="w-20 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 z-20 transition-colors">
-                        <div class="flex flex-col h-full">
-                            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                                <div class="flex items-center space-x-3 overflow-hidden">
-                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0">
-                                        ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover rounded-xl">` : currentUser.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div class="hidden md:block truncate">
-                                        <h2 class="font-semibold text-sm truncate">${escapeHtml(currentUser.name)}</h2>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">ID: ${currentUser.id}</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center space-x-1">
-                                    <button onclick="openPencilMenu()" title="Создать / Добавить друга" class="text-slate-500 hover:text-brand-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-                                        <i class="fa-solid fa-pen-to-square text-lg"></i>
-                                    </button>
-                                    <button onclick="handleLogout()" title="Выйти" class="hidden md:flex text-slate-400 hover:text-red-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-                                        <i class="fa-solid fa-right-from-bracket"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Tabs Navigation -->
-                            <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
-                                <button onclick="switchTab('chats')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'chats' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-comments text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Чаты</span>
-                                </button>
-                                <button onclick="switchTab('groups')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'groups' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-users text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Группы / Каналы</span>
-                                </button>
-                                <button onclick="switchTab('stickers')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'stickers' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-face-smile text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Стикеры</span>
-                                </button>
-                                <button onclick="switchTab('search')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'search' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-link text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Добавить по ссылке</span>
-                                </button>
-                                <button onclick="switchTab('requests')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition relative ${activeTab === 'requests' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-bell text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Заявки в друзья</span>
-                                    ${(currentUser.friendRequests && currentUser.friendRequests.length > 0) ? `
-                                        <span class="absolute right-3 top-3 md:static bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">${currentUser.friendRequests.length}</span>
-                                    ` : ''}
-                                </button>
-                                <button onclick="switchTab('profile')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
-                                    <i class="fa-solid fa-user-gear text-lg w-6 text-center"></i>
-                                    <span class="hidden md:inline">Профиль и ID</span>
-                                </button>
-                            </nav>
-                        </div>
-
-                        <div class="p-3 border-t border-slate-200 dark:border-slate-800 md:hidden flex justify-center">
-                            <button onclick="handleLogout()" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl">
-                                <i class="fa-solid fa-right-from-bracket text-lg"></i>
-                            </button>
-                        </div>
-                    </aside>
-
-                    <!-- Main Content Workspace -->
-                    <main class="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
-                        ${renderMainContent(currentUser)}
-                    </main>
-                </div>
-
-                <!-- Pencil Action Modal (Group, Channel, Add friend by ID) -->
-                <div id="pencil-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="font-bold text-lg">Быстрое меню действий</h3>
-                            <button onclick="closePencilMenu()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-
-                        <div class="space-y-3">
-                            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                                <h4 class="font-semibold text-sm mb-1"><i class="fa-solid fa-user-plus text-brand-500 mr-2"></i>Добавить друга по ID</h4>
-                                <p class="text-xs text-slate-500 mb-2">Введите 10-значный ID пользователя, чтобы отправить ему заявку:</p>
-                                <div class="flex gap-2">
-                                    <input type="text" id="pencil-friend-id" placeholder="0000000002" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:border-brand-500">
-                                    <button onclick="submitFriendByIdFromPencil()" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition">Добавить</button>
-                                </div>
-                            </div>
-
-                            <div class="flex gap-2 pt-2">
-                                <button onclick="closePencilMenu(); openCreateGroupModal();" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl transition flex items-center justify-center space-x-2">
-                                    <i class="fa-solid fa-users-rectangle text-brand-500"></i>
-                                    <span>Создать группу</span>
-                                </button>
-                                <button onclick="closePencilMenu(); switchTab('stickers');" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl transition flex items-center justify-center space-x-2">
-                                    <i class="fa-solid fa-face-smile text-brand-500"></i>
-                                    <span>Создать стикер</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function openPencilMenu() {
-            const modal = document.getElementById('pencil-modal');
-            if (modal) modal.classList.remove('hidden');
-        }
-
-        function closePencilMenu() {
-            const modal = document.getElementById('pencil-modal');
-            if (modal) modal.classList.add('hidden');
-        }
-
-        function submitFriendByIdFromPencil() {
-            const input = document.getElementById('pencil-friend-id');
-            const targetId = (input.value || '').trim();
-            if (!targetId) {
-                showNotification('Введите ID пользователя', 'error');
-                return;
-            }
-            closePencilMenu();
-            autoSendFriendRequest(targetId);
-        }
-
-        function renderAuthScreen() {
-            return `
-                <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-950 dark:to-slate-900 p-4">
-                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
-                        <div class="text-center mb-8">
-                            <div class="w-16 h-16 bg-brand-500 rounded-2xl mx-auto flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-brand-500/30 mb-4">
-                                <i class="fa-solid fa-bolt"></i>
-                            </div>
-                            <h1 class="text-2xl font-bold tracking-tight">Xena Messenger</h1>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Реальные ID от 0000000001 и стикерпаки</p>
-                        </div>
-
-                        <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
-                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'login' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}">
-                                Вход
-                            </button>
-                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${authMode === 'register' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}">
-                                Регистрация
-                            </button>
-                        </div>
-
-                        <form class="space-y-4" onsubmit="handleAuthSubmit(event)">
-                            ${authMode === 'register' ? `
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя пользователя</label>
-                                    <input type="text" id="auth-name" required placeholder="Иван Иванов" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
-                                </div>
-                            ` : ''}
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email или Ваш ID (например 0000000001)</label>
-                                <input type="text" id="auth-email" required placeholder="0000000001 или email@example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Пароль</label>
-                                <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent focus:outline-none focus:border-brand-500 transition text-sm">
-                            </div>
-
-                            <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition mt-2">
-                                ${authMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function setAuthMode(mode) {
-            authMode = mode;
-            renderApp();
-        }
-
-        function handleAuthSubmit(e) {
-            e.preventDefault();
-            const identifier = document.getElementById('auth-email').value.trim();
-            const password = document.getElementById('auth-password').value.trim();
-            let users = DB.getUsers();
-
-            if (authMode === 'register') {
-                const name = document.getElementById('auth-name').value.trim();
-                const newUserId = DB.getNextUserId();
+            async registerUser(name, email, password) {
+                const newId = this.getNextUserId();
                 const newUser = {
-                    id: newUserId,
+                    id: newId,
                     name,
-                    email: identifier,
-                    password,
-                    bio: 'Привет! Мой ID в Xena: ' + newUserId,
+                    email,
+                    password, // Note: In a real prod app, never store plain text passwords. This is for the simulation.
+                    bio: 'Привет! Мой ID в Xena: ' + newId,
                     avatar: '',
                     darkMode: false,
                     friends: [],
                     friendRequests: [],
                     sentRequests: []
                 };
-
-                users.push(newUser);
-                DB.saveUsers(users);
-                DB.setCurrentUser(newUser);
-                showNotification('Регистрация успешна! Ваш ID: ' + newUserId);
-                renderApp();
-            } else {
-                const user = users.find(u => (u.email.toLowerCase() === identifier.toLowerCase() || u.id === identifier) && u.password === password);
-                if (user) {
-                    DB.setCurrentUser(user);
-                    showNotification('С возвращением, ' + user.name + '!');
-                    renderApp();
-                } else {
-                    showNotification('Неверный логин, ID или пароль', 'error');
+                try {
+                    await setDoc(publicDoc('users', newId), newUser);
+                    window.AppState.currentUser = newUser;
+                    localStorage.setItem('xena_saved_user_id', newId);
+                    window.showNotification('Успешно! Ваш ID: ' + newId);
+                    window.renderApp();
+                } catch (e) {
+                    console.error("Register err:", e);
+                    window.showNotification('Ошибка регистрации', 'error');
+                }
+            },
+            async updateUser(userObj) {
+                if (!userObj || !userObj.id) return;
+                try {
+                    await setDoc(publicDoc('users', userObj.id), userObj, { merge: true });
+                } catch (e) {
+                    console.error("Update user err:", e);
                 }
             }
-        }
+        };
 
-        function handleLogout() {
-            DB.setCurrentUser(null);
-            activeChatId = null;
-            activeTab = 'chats';
-            showNotification('Вы вышли из системы');
-            renderApp();
-        }
-
-        function renderMainContent(currentUser) {
-            currentUser.friends = currentUser.friends || [];
-            currentUser.friendRequests = currentUser.friendRequests || [];
-            currentUser.sentRequests = currentUser.sentRequests || [];
-
-            if (activeTab === 'search') {
-                return renderLinkSearchTab(currentUser);
-            } else if (activeTab === 'requests') {
-                return renderRequestsTab(currentUser);
-            } else if (activeTab === 'groups') {
-                return renderGroupsTab(currentUser);
-            } else if (activeTab === 'stickers') {
-                return renderStickersTab(currentUser);
-            } else if (activeTab === 'profile') {
-                return renderProfileTab(currentUser);
-            } else {
-                return renderChatsTab(currentUser);
-            }
-        }
-
-        function renderChatsTab(currentUser) {
-            const groups = DB.getGroups().filter(g => g.members && g.members.includes(currentUser.id));
-
-            return `
-                <div class="flex h-full w-full overflow-hidden">
-                    <div class="${activeChatId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-                        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                            <h2 class="font-bold text-lg">Чаты</h2>
-                            <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 px-2.5 py-1 rounded-full font-medium">
-                                ${currentUser.friends.length + groups.length} диалогов
-                            </span>
-                        </div>
-                        <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
-                            ${(currentUser.friends.length === 0 && groups.length === 0) ? `
-                                <div class="p-8 text-center text-slate-400">
-                                    <i class="fa-solid fa-comments text-4xl mb-3 opacity-50"></i>
-                                    <p class="text-sm font-medium">Список чатов пуст</p>
-                                    <p class="text-xs mt-1">Используйте кнопку карандаша или добавьте друга по ID.</p>
-                                </div>
-                            ` : ''}
-
-                            <!-- Group chats -->
-                            ${groups.map(group => {
-                                const isSelected = activeChatId === group.id;
-                                const lastMsg = getLastGroupMessage(group.id);
-                                return `
-                                    <div onclick="openChat('${group.id}', true)" class="flex items-center space-x-3 p-4 cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSelected ? 'bg-slate-100 dark:bg-slate-800' : ''}">
-                                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold shrink-0 shadow">
-                                            <i class="fa-solid fa-users"></i>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <h3 class="font-semibold text-sm truncate">${escapeHtml(group.name)}</h3>
-                                                ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
-                                            </div>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                ${lastMsg ? escapeHtml(lastMsg.senderName + ': ' + (lastMsg.type === 'sticker' ? '[Стикер]' : lastMsg.text)) : 'Группа'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-
-                            <!-- Direct chats with friends -->
-                            ${currentUser.friends.map(friendId => {
-                                const users = DB.getUsers();
-                                const friend = users.find(u => u.id === friendId);
-                                if (!friend) return '';
-                                const isSelected = activeChatId === friend.id;
-                                const lastMsg = getLastDirectMessage(currentUser.id, friend.id);
-                                return `
-                                    <div onclick="openChat('${friend.id}', false)" class="flex items-center space-x-3 p-4 cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSelected ? 'bg-slate-100 dark:bg-slate-800' : ''}">
-                                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 shadow overflow-hidden">
-                                            ${friend.avatar ? `<img src="${friend.avatar}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <h3 class="font-semibold text-sm truncate">${escapeHtml(friend.name)}</h3>
-                                                ${lastMsg ? `<span class="text-[10px] text-slate-400">${formatTime(lastMsg.timestamp)}</span>` : ''}
-                                            </div>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                ${lastMsg ? escapeHtml(lastMsg.type === 'sticker' ? '[Стикер]' : lastMsg.text) : 'Нет сообщений'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-
-                    <div class="${!activeChatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
-                        ${activeChatId ? renderActiveChatWindow(currentUser, activeChatId) : `
-                            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                                <div class="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-3xl text-slate-400 mb-4 shadow-inner">
-                                    <i class="fa-solid fa-comments"></i>
-                                </div>
-                                <h3 class="font-semibold text-lg text-slate-700 dark:text-slate-300">Выберите диалог</h3>
-                                <p class="text-sm max-w-sm mt-1">Выберите друга или группу слева для отправки сообщений и стикеров.</p>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderStickersTab(currentUser) {
-            const stickers = DB.getStickers();
-
-            return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl">Создание и каталог стикеров</h2>
-                        <p class="text-xs text-slate-500 mt-1">Созданные стикеры станут доступны абсолютно всем пользователям мессенджера!</p>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6 space-y-6">
-                        <!-- Creator Form -->
-                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                            <h3 class="font-bold text-sm mb-4"><i class="fa-solid fa-wand-magic-sparkles text-brand-500 mr-2"></i>Добавить новый стикер для всех</h3>
-                            <form onsubmit="handleCreateSticker(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название стикера</label>
-                                    <input type="text" id="sticker-name" required placeholder="Кот в шляпе" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL картинки стикера (прямая ссылка)</label>
-                                    <input type="url" id="sticker-url" required placeholder="https://placehold.co/150x150/16a34a/ffffff?text=🐱" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
-                                </div>
-                                <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow transition text-sm">
-                                    Опубликовать для всех
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- Catalog Grid -->
-                        <div class="max-w-4xl mx-auto">
-                            <h3 class="font-bold text-sm mb-3 text-slate-500 uppercase tracking-wider">Доступные стикеры (${stickers.length})</h3>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                ${stickers.map(st => `
-                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm">
-                                        <img src="${escapeHtml(st.url)}" class="w-20 h-20 object-cover rounded-xl mb-2 shadow" onerror="this.src='https://placehold.co/120x120/22c55e/ffffff?text=Sticker'">
-                                        <span class="text-xs font-medium truncate w-full text-center">${escapeHtml(st.name)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function handleCreateSticker(e) {
+        // Actions
+        window.handleAuthSubmit = (e) => {
             e.preventDefault();
-            const name = document.getElementById('sticker-name').value.trim();
-            const url = document.getElementById('sticker-url').value.trim();
+            const identifier = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
 
-            const newSticker = {
-                id: 'st_' + Math.random().toString(36).substr(2, 7),
-                name,
-                url
-            };
+            if (window.AppState.authMode === 'register') {
+                const name = document.getElementById('auth-name').value.trim();
+                window.DB.registerUser(name, identifier, password);
+            } else {
+                const user = window.AppState.users.find(u => 
+                    (u.email.toLowerCase() === identifier.toLowerCase() || u.id === identifier) && u.password === password
+                );
+                if (user) {
+                    window.AppState.currentUser = user;
+                    localStorage.setItem('xena_saved_user_id', user.id);
+                    window.showNotification('С возвращением, ' + user.name + '!');
+                    window.renderApp();
+                } else {
+                    window.showNotification('Неверный логин, ID или пароль', 'error');
+                }
+            }
+        };
 
-            DB.saveSticker(newSticker);
-            showNotification('Стикер успешно создан и доступен всем!');
-            renderApp();
-        }
+        window.handleLogout = () => {
+            window.AppState.currentUser = null;
+            window.AppState.activeChatId = null;
+            window.AppState.activeTab = 'chats';
+            localStorage.removeItem('xena_saved_user_id');
+            window.showNotification('Вы вышли из системы');
+            window.renderApp();
+        };
 
-        function renderLinkSearchTab(currentUser) {
-            const link = `${window.location.origin}${window.location.pathname}?add=${currentUser.id}`;
-            const queryInput = window._linkQuery || '';
+        window.setAuthMode = (mode) => {
+            window.AppState.authMode = mode;
+            window.renderApp();
+        };
 
-            return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl mb-2">Добавить друга по ID или ссылке</h2>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                            Введите 10-значный ID пользователя (например, <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">0000000001</code>) или ссылку для мгновенной отправки заявки.
-                        </p>
-                        <div class="flex gap-2">
-                            <input type="text" id="link-input" value="${escapeHtml(queryInput)}" oninput="handleLinkInput(event)" placeholder="0000000002 или ссылка" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
-                            <button onclick="submitFriendByLink()" class="px-6 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl shadow-md transition shrink-0">
-                                Отправить заявку
-                            </button>
-                        </div>
-                    </div>
+        window.switchTab = (tab) => {
+            window.AppState.activeTab = tab;
+            if (tab !== 'chats') window.AppState.activeChatId = null;
+            window.AppState.isStickersOpen = false;
+            window.renderApp();
+        };
 
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm text-center space-y-4">
-                            <div class="w-16 h-16 bg-brand-100 dark:bg-brand-900/40 text-brand-600 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-2">
-                                <i class="fa-solid fa-id-badge"></i>
-                            </div>
-                            <h3 class="font-bold text-base">Ваш уникальный ID в системе</h3>
-                            <div class="text-2xl font-mono font-bold text-brand-600 dark:text-brand-400 bg-slate-100 dark:bg-slate-800 py-3 rounded-xl select-all">
-                                ${currentUser.id}
-                            </div>
-                            <p class="text-xs text-slate-500">Сообщите этот ID другу, чтобы он добавил вас напрямую.</p>
-                            
-                            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                                <input type="text" readonly value="${link}" class="w-full bg-transparent text-xs px-2 text-slate-600 dark:text-slate-300 focus:outline-none select-all">
-                                <button onclick="copyMyFriendLink('${link}')" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition shrink-0">
-                                    <i class="fa-solid fa-copy mr-1"></i> Ссылка
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+        window.autoSendFriendRequest = async (targetUserId) => {
+            let currentUser = { ...window.AppState.currentUser };
+            targetUserId = String(targetUserId).trim();
 
-        function handleLinkInput(e) {
-            window._linkQuery = e.target.value;
-        }
+            if (targetUserId === currentUser.id) {
+                window.showNotification('Нельзя отправить заявку самому себе!', 'error');
+                return;
+            }
 
-        function copyMyFriendLink(link) {
-            const dummy = document.createElement('input');
-            document.body.appendChild(dummy);
-            dummy.value = link;
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
-            showNotification('Ссылка скопирована в буфер обмена!');
-        }
+            const targetUser = window.AppState.users.find(u => u.id === targetUserId);
+            if (!targetUser) {
+                window.showNotification('Пользователь с ID ' + targetUserId + ' не найден!', 'error');
+                return;
+            }
 
-        function submitFriendByLink() {
-            const query = (window._linkQuery || '').trim();
+            currentUser.friends = currentUser.friends || [];
+            if (currentUser.friends.includes(targetUserId)) {
+                window.showNotification('Этот пользователь уже у вас в друзьях!', 'error');
+                return;
+            }
+
+            // Update Target User's requests
+            const updatedTarget = { ...targetUser };
+            updatedTarget.friendRequests = updatedTarget.friendRequests || [];
+            if (!updatedTarget.friendRequests.includes(currentUser.id)) {
+                updatedTarget.friendRequests.push(currentUser.id);
+            }
+
+            // Update Current User's sent requests
+            currentUser.sentRequests = currentUser.sentRequests || [];
+            if (!currentUser.sentRequests.includes(targetUser.id)) {
+                currentUser.sentRequests.push(targetUser.id);
+            }
+
+            // Save to Firebase
+            await window.DB.updateUser(updatedTarget);
+            await window.DB.updateUser(currentUser);
+
+            window.showNotification('Заявка пользователю ' + targetUser.name + ' отправлена!');
+            window.AppState.activeTab = 'chats';
+            window.renderApp();
+        };
+
+        window.submitFriendByIdFromPencil = () => {
+            const input = document.getElementById('pencil-friend-id');
+            const targetId = (input.value || '').trim();
+            if (!targetId) {
+                window.showNotification('Введите ID пользователя', 'error');
+                return;
+            }
+            window.closePencilMenu();
+            window.autoSendFriendRequest(targetId);
+        };
+
+        window.handleLinkInput = (e) => {
+            window.AppState.linkQuery = e.target.value;
+        };
+
+        window.submitFriendByLink = () => {
+            const query = (window.AppState.linkQuery || '').trim();
             if (!query) {
-                showNotification('Введите ID или ссылку', 'error');
+                window.showNotification('Введите ID или ссылку', 'error');
                 return;
             }
 
@@ -645,503 +355,61 @@
                 }
             }
 
-            autoSendFriendRequest(targetId);
-            window._linkQuery = '';
-            renderApp();
-        }
+            window.autoSendFriendRequest(targetId);
+            window.AppState.linkQuery = '';
+            window.renderApp();
+        };
 
-        function autoSendFriendRequest(targetUserId) {
-            let users = DB.getUsers();
-            let currentUser = DB.getCurrentUser();
-
-            targetUserId = targetUserId.trim();
-
-            if (targetUserId === currentUser.id) {
-                showNotification('Нельзя отправить заявку самому себе!', 'error');
-                return;
-            }
-
-            const targetUser = users.find(u => u.id === targetUserId);
-            if (!targetUser) {
-                showNotification('Пользователь с ID ' + targetUserId + ' не найден в системе!', 'error');
-                return;
-            }
-
-            if (currentUser.friends && currentUser.friends.includes(targetUserId)) {
-                showNotification('Этот пользователь уже у вас в друзьях!', 'error');
-                return;
-            }
-
-            targetUser.friendRequests = targetUser.friendRequests || [];
-            if (!targetUser.friendRequests.includes(currentUser.id)) {
-                targetUser.friendRequests.push(currentUser.id);
-            }
-
-            currentUser.sentRequests = currentUser.sentRequests || [];
-            if (!currentUser.sentRequests.includes(targetUser.id)) {
-                currentUser.sentRequests.push(targetUser.id);
-            }
-
-            DB.updateUser(targetUser);
-            DB.updateUser(currentUser);
-
-            showNotification('Заявка пользователю ' + targetUser.name + ' (' + targetUser.id + ') отправлена!');
-            activeTab = 'chats';
-            renderApp();
-        }
-
-        function renderRequestsTab(currentUser) {
-            const requests = currentUser.friendRequests || [];
-
-            return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl">Заявки в друзья</h2>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Пользователи, отправившие вам заявку по ID или ссылке</p>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div class="max-w-3xl mx-auto space-y-4">
-                            ${requests.length === 0 ? `
-                                <div class="py-16 text-center text-slate-400">
-                                    <i class="fa-solid fa-bell-slash text-4xl mb-3 opacity-50"></i>
-                                    <p class="font-medium">Нет входящих заявок</p>
-                                    <p class="text-xs mt-1">Сообщите свой ID другим пользователям.</p>
-                                </div>
-                            ` : requests.map(senderId => {
-                                const users = DB.getUsers();
-                                const sender = users.find(u => u.id === senderId);
-                                if (!sender) return '';
-
-                                return `
-                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-sm">
-                                        <div class="flex items-center space-x-4">
-                                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shrink-0 overflow-hidden shadow">
-                                                ${sender.avatar ? `<img src="${sender.avatar}" class="w-full h-full object-cover">` : sender.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <h3 class="font-semibold text-sm">${escapeHtml(sender.name)}</h3>
-                                                <p class="text-xs text-slate-500 font-mono">ID: ${sender.id}</p>
-                                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">${escapeHtml(sender.bio || '')}</p>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <button onclick="acceptFriendRequest('${sender.id}')" class="px-4 py-2 bg-brand-500 text-white font-medium text-xs rounded-xl shadow hover:bg-brand-600 transition">
-                                                <i class="fa-solid fa-check mr-1"></i> Принять
-                                            </button>
-                                            <button onclick="rejectFriendRequest('${sender.id}')" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-xs rounded-xl hover:bg-slate-300 transition">
-                                                <i class="fa-solid fa-xmark mr-1"></i> Отклонить
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function acceptFriendRequest(senderId) {
-            let users = DB.getUsers();
-            let currentUser = DB.getCurrentUser();
-            const sender = users.find(u => u.id === senderId);
+        window.acceptFriendRequest = async (senderId) => {
+            let currentUser = { ...window.AppState.currentUser };
+            const sender = window.AppState.users.find(u => u.id === senderId);
 
             if (!sender) return;
+            let updatedSender = { ...sender };
 
             currentUser.friends = currentUser.friends || [];
             if (!currentUser.friends.includes(sender.id)) currentUser.friends.push(sender.id);
 
-            sender.friends = sender.friends || [];
-            if (!sender.friends.includes(currentUser.id)) sender.friends.push(currentUser.id);
+            updatedSender.friends = updatedSender.friends || [];
+            if (!updatedSender.friends.includes(currentUser.id)) updatedSender.friends.push(currentUser.id);
 
             currentUser.friendRequests = currentUser.friendRequests.filter(id => id !== senderId);
-            sender.sentRequests = (sender.sentRequests || []).filter(id => id !== currentUser.id);
+            updatedSender.sentRequests = (updatedSender.sentRequests || []).filter(id => id !== currentUser.id);
 
-            DB.updateUser(currentUser);
-            DB.updateUser(sender);
+            await window.DB.updateUser(currentUser);
+            await window.DB.updateUser(updatedSender);
 
-            showNotification('Вы добавили ' + sender.name + ' в друзья!');
-            activeChatId = sender.id;
-            activeTab = 'chats';
-            renderApp();
-        }
+            window.showNotification('Вы добавили ' + sender.name + ' в друзья!');
+            window.AppState.activeChatId = sender.id;
+            window.AppState.activeTab = 'chats';
+            window.renderApp();
+        };
 
-        function rejectFriendRequest(senderId) {
-            let users = DB.getUsers();
-            let currentUser = DB.getCurrentUser();
-            const sender = users.find(u => u.id === senderId);
+        window.rejectFriendRequest = async (senderId) => {
+            let currentUser = { ...window.AppState.currentUser };
+            const sender = window.AppState.users.find(u => u.id === senderId);
 
             currentUser.friendRequests = currentUser.friendRequests.filter(id => id !== senderId);
+            await window.DB.updateUser(currentUser);
+
             if (sender) {
-                sender.sentRequests = (sender.sentRequests || []).filter(id => id !== currentUser.id);
-                DB.updateUser(sender);
+                let updatedSender = { ...sender };
+                updatedSender.sentRequests = (updatedSender.sentRequests || []).filter(id => id !== currentUser.id);
+                await window.DB.updateUser(updatedSender);
             }
 
-            DB.updateUser(currentUser);
-            showNotification('Заявка отклонена');
-            renderApp();
-        }
+            window.showNotification('Заявка отклонена');
+            window.renderApp();
+        };
 
-        function renderGroupsTab(currentUser) {
-            const groups = DB.getGroups();
-
-            return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
-                        <div>
-                            <h2 class="font-bold text-xl">Группы и Каналы</h2>
-                            <p class="text-xs text-slate-500 mt-1">Публичные пространства для коллективного общения</p>
-                        </div>
-                        <button onclick="openCreateGroupModal()" class="px-4 py-2.5 bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md hover:bg-brand-600 transition">
-                            <i class="fa-solid fa-plus mr-1.5"></i> Создать группу
-                        </button>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                            ${groups.length === 0 ? `
-                                <div class="col-span-full py-16 text-center text-slate-400">
-                                    <i class="fa-solid fa-users-rectangle text-4xl mb-3 opacity-50"></i>
-                                    <p class="font-medium">Нет созданных групп</p>
-                                    <p class="text-xs mt-1">Нажмите кнопку создания, чтобы начать.</p>
-                                </div>
-                            ` : groups.map(group => {
-                                const isMember = group.members && group.members.includes(currentUser.id);
-                                return `
-                                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-                                        <div>
-                                            <div class="flex items-center space-x-3 mb-3">
-                                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold shrink-0 shadow">
-                                                    <i class="fa-solid fa-users"></i>
-                                                </div>
-                                                <div class="min-w-0">
-                                                    <h3 class="font-semibold text-sm truncate">${escapeHtml(group.name)}</h3>
-                                                    <p class="text-xs text-slate-500">${group.members.length} участников</p>
-                                                </div>
-                                            </div>
-                                            <p class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                                                ${escapeHtml(group.description || 'Без описания')}
-                                            </p>
-                                        </div>
-                                        <div class="flex justify-end">
-                                            ${isMember ? `
-                                                <button onclick="openChat('${group.id}', true)" class="px-4 py-2 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-medium text-xs rounded-xl hover:bg-brand-200 transition">
-                                                    <i class="fa-solid fa-comment mr-1.5"></i> Открыть чат
-                                                </button>
-                                            ` : `
-                                                <button onclick="joinGroup('${group.id}')" class="px-4 py-2 bg-brand-500 text-white font-medium text-xs rounded-xl shadow hover:bg-brand-600 transition">
-                                                    <i class="fa-solid fa-right-to-bracket mr-1.5"></i> Войти
-                                                </button>
-                                            `}
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Create Group Modal Backdrop -->
-                <div id="create-group-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
-                        <h3 class="font-bold text-lg mb-4">Создать новую группу / канал</h3>
-                        <form onsubmit="handleCreateGroupSubmit(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Название</label>
-                                <input type="text" id="group-name-input" required placeholder="Например: Новости Xena" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Описание</label>
-                                <textarea id="group-desc-input" rows="2" placeholder="О чем это сообщество?" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500"></textarea>
-                            </div>
-                            <div class="flex justify-end space-x-2 pt-2">
-                                <button type="button" onclick="closeCreateGroupModal()" class="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl">Отмена</button>
-                                <button type="submit" class="px-4 py-2.5 bg-brand-500 text-white text-xs font-semibold rounded-xl shadow">Создать</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function openCreateGroupModal() {
-            const modal = document.getElementById('create-group-modal');
-            if (modal) modal.classList.remove('hidden');
-        }
-
-        function closeCreateGroupModal() {
-            const modal = document.getElementById('create-group-modal');
-            if (modal) modal.classList.add('hidden');
-        }
-
-        function handleCreateGroupSubmit(e) {
-            e.preventDefault();
-            const name = document.getElementById('group-name-input').value.trim();
-            const description = document.getElementById('group-desc-input').value.trim();
-            const currentUser = DB.getCurrentUser();
-
-            let groups = DB.getGroups();
-            const newGroup = {
-                id: 'g_' + Math.random().toString(36).substr(2, 7),
-                name,
-                description,
-                adminId: currentUser.id,
-                members: [currentUser.id]
-            };
-
-            groups.push(newGroup);
-            DB.saveGroups(groups);
-            closeCreateGroupModal();
-            showNotification('Группа создана!');
-            activeChatId = newGroup.id;
-            activeTab = 'chats';
-            renderApp();
-        }
-
-        function joinGroup(groupId) {
-            let groups = DB.getGroups();
-            const currentUser = DB.getCurrentUser();
-            groups = groups.map(g => {
-                if (g.id === groupId && !g.members.includes(currentUser.id)) {
-                    g.members.push(currentUser.id);
-                }
-                return g;
-            });
-            DB.saveGroups(groups);
-            showNotification('Вы вошли в группу!');
-            activeChatId = groupId;
-            activeTab = 'chats';
-            renderApp();
-        }
-
-        function renderProfileTab(currentUser) {
-            return `
-                <div class="flex flex-col h-full overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h2 class="font-bold text-xl">Профиль и ID</h2>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div class="max-w-xl mx-auto space-y-6">
-                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                                <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
-                                    <div class="flex items-center space-x-4 mb-2">
-                                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white text-2xl font-bold overflow-hidden shadow">
-                                            ${currentUser.avatar ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover">` : currentUser.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 class="font-bold text-base">${escapeHtml(currentUser.name)}</h3>
-                                            <p class="text-xs text-slate-500 font-mono">Ваш ID: <span class="font-bold text-brand-600">${currentUser.id}</span></p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя</label>
-                                        <input type="text" id="profile-name" value="${escapeHtml(currentUser.name)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL аватара</label>
-                                        <input type="text" id="profile-avatar" value="${escapeHtml(currentUser.avatar || '')}" placeholder="https://example.com/avatar.jpg" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Статус</label>
-                                        <textarea id="profile-bio" rows="2" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">${escapeHtml(currentUser.bio || '')}</textarea>
-                                    </div>
-
-                                    <div class="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-800">
-                                        <div>
-                                            <h4 class="font-semibold text-sm">Темная тема</h4>
-                                            <p class="text-xs text-slate-500">Ночной режим интерфейса</p>
-                                        </div>
-                                        <input type="checkbox" id="profile-darkmode" ${currentUser.darkMode ? 'checked' : ''} class="w-5 h-5 accent-brand-500 rounded cursor-pointer">
-                                    </div>
-
-                                    <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg transition">
-                                        Сохранить настройки
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function handleProfileUpdate(e) {
-            e.preventDefault();
-            let currentUser = DB.getCurrentUser();
-            currentUser.name = document.getElementById('profile-name').value.trim();
-            currentUser.avatar = document.getElementById('profile-avatar').value.trim();
-            currentUser.bio = document.getElementById('profile-bio').value.trim();
-            currentUser.darkMode = document.getElementById('profile-darkmode').checked;
-
-            DB.updateUser(currentUser);
-            showNotification('Профиль успешно обновлен!');
-            renderApp();
-        }
-
-        function renderActiveChatWindow(currentUser, chatId) {
-            const isGroup = chatId.startsWith('g_');
-            let chatName = '';
-            let chatAvatarOrIcon = '';
-            let isMember = true;
-
-            if (isGroup) {
-                const group = DB.getGroups().find(g => g.id === chatId);
-                if (!group) return '';
-                chatName = group.name;
-                chatAvatarOrIcon = '<i class="fa-solid fa-users"></i>';
-                isMember = group.members.includes(currentUser.id);
-            } else {
-                const users = DB.getUsers();
-                const friend = users.find(u => u.id === chatId);
-                if (!friend) return '';
-                chatName = friend.name;
-                chatAvatarOrIcon = friend.avatar ? `<img src="${friend.avatar}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase();
-            }
-
-            const messages = getConversationMessages(currentUser.id, chatId, isGroup);
-            const stickers = DB.getStickers();
-
-            return `
-                <div class="flex flex-col h-full bg-white dark:bg-slate-900 relative">
-                    <!-- Chat Top Header -->
-                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-10">
-                        <div class="flex items-center space-x-3">
-                            <button onclick="closeActiveChat()" class="md:hidden text-slate-500 hover:text-slate-800 p-2">
-                                <i class="fa-solid fa-arrow-left text-lg"></i>
-                            </button>
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center text-white font-bold shadow overflow-hidden">
-                                ${chatAvatarOrIcon}
-                            </div>
-                            <div>
-                                <h3 class="font-semibold text-sm">${escapeHtml(chatName)}</h3>
-                                <p class="text-xs text-slate-500">${isGroup ? 'Групповой чат' : 'В сети'}</p>
-                            </div>
-                        </div>
-
-                        ${!isGroup ? `
-                            <div class="flex items-center space-x-2">
-                                <button onclick="startCall('${escapeHtml(chatName)}', 'audio')" title="Аудиозвонок" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
-                                    <i class="fa-solid fa-phone text-sm"></i>
-                                </button>
-                                <button onclick="startCall('${escapeHtml(chatName)}', 'video')" title="Видеозвонок" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
-                                    <i class="fa-solid fa-video text-sm"></i>
-                                </button>
-                            </div>
-                        ` : ''}
-                    </div>
-
-                    <!-- Messages Container -->
-                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-slate-950/50">
-                        ${messages.length === 0 ? `
-                            <div class="h-full flex flex-col items-center justify-center text-center text-slate-400">
-                                <i class="fa-regular fa-paper-plane text-3xl mb-2 opacity-50"></i>
-                                <p class="text-sm font-medium">История сообщений пуста</p>
-                                <p class="text-xs">Отправьте первое сообщение или стикер</p>
-                            </div>
-                        ` : messages.map(msg => {
-                            const isMe = msg.senderId === currentUser.id;
-                            return `
-                                <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                                    <div class="max-w-xs md:max-w-md rounded-2xl px-4 py-2.5 shadow-sm ${isMe ? 'bg-brand-500 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-none'}">
-                                        ${isGroup && !isMe ? `<div class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(msg.senderName)}</div>` : ''}
-                                        ${msg.type === 'sticker' ? `
-                                            <img src="${escapeHtml(msg.stickerUrl)}" class="w-32 h-32 object-cover rounded-xl my-1 shadow">
-                                        ` : `
-                                            <p class="text-sm break-words">${escapeHtml(msg.text)}</p>
-                                        `}
-                                        <div class="text-[10px] mt-1 text-right ${isMe ? 'text-brand-100' : 'text-slate-400'}">
-                                            ${formatTime(msg.timestamp)}
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-
-                    <!-- Stickers Popup Picker -->
-                    ${isStickersOpen ? `
-                        <div class="absolute bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-2xl z-30 max-h-60 overflow-y-auto">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="font-bold text-xs uppercase tracking-wider text-slate-500">Стикеры</span>
-                                <button onclick="toggleStickersPicker()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                            <div class="grid grid-cols-3 gap-2">
-                                ${stickers.map(st => `
-                                    <button onclick="sendStickerMessage('${chatId}', ${isGroup}, '${escapeHtml(st.url)}')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl flex flex-col items-center transition">
-                                        <img src="${escapeHtml(st.url)}" class="w-14 h-14 object-cover rounded-lg mb-1" onerror="this.src='https://placehold.co/80x80/22c55e/ffffff?text=Sticker'">
-                                        <span class="text-[10px] truncate w-full text-center text-slate-600 dark:text-slate-400">${escapeHtml(st.name)}</span>
-                                    </button>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <!-- Message Input Form -->
-                    <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2 z-10">
-                        <button type="button" onclick="toggleStickersPicker()" title="Стикеры" class="p-3 text-slate-500 hover:text-brand-500 transition">
-                            <i class="fa-solid fa-face-smile text-xl"></i>
-                        </button>
-                        <input type="text" id="chat-input" placeholder="Введите сообщение..." autocomplete="off" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 transition text-sm">
-                        <button type="submit" class="w-12 h-12 bg-brand-500 hover:bg-brand-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-brand-500/20 transition shrink-0">
-                            <i class="fa-solid fa-paper-plane text-sm"></i>
-                        </button>
-                    </form>
-                </div>
-            `;
-        }
-
-        function toggleStickersPicker() {
-            isStickersOpen = !isStickersOpen;
-            renderApp();
-            scrollToBottom();
-        }
-
-        function sendStickerMessage(chatId, isGroup, stickerUrl) {
-            const currentUser = DB.getCurrentUser();
-            const newMessage = {
-                id: 'm_' + Math.random().toString(36).substr(2, 7),
-                senderId: currentUser.id,
-                senderName: currentUser.name,
-                chatId: chatId,
-                isGroup: isGroup,
-                type: 'sticker',
-                stickerUrl: stickerUrl,
-                timestamp: Date.now()
-            };
-
-            let messages = DB.getMessages();
-            messages.push(newMessage);
-            DB.saveMessages(messages);
-
-            isStickersOpen = false;
-            renderApp();
-            scrollToBottom();
-        }
-
-        function openChat(chatId, isGroup) {
-            activeChatId = chatId;
-            isStickersOpen = false;
-            renderApp();
-            scrollToBottom();
-        }
-
-        function closeActiveChat() {
-            activeChatId = null;
-            isStickersOpen = false;
-            renderApp();
-        }
-
-        function handleSendMessage(e, chatId, isGroup) {
+        window.handleSendMessage = async (e, chatId, isGroup) => {
             e.preventDefault();
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
             if (!text) return;
 
-            const currentUser = DB.getCurrentUser();
+            const currentUser = window.AppState.currentUser;
             const newMessage = {
-                id: 'm_' + Math.random().toString(36).substr(2, 7),
                 senderId: currentUser.id,
                 senderName: currentUser.name,
                 chatId: chatId,
@@ -1151,110 +419,544 @@
                 timestamp: Date.now()
             };
 
-            let messages = DB.getMessages();
-            messages.push(newMessage);
-            DB.saveMessages(messages);
-
+            await addDoc(publicPath('messages'), newMessage);
+            
             input.value = '';
-            renderApp();
-            scrollToBottom();
-        }
+            window.scrollToBottom();
+        };
 
-        function startCall(peerName, type) {
-            activeCall = { peerName, type, status: 'calling' };
-            renderApp();
-            setTimeout(() => {
-                if (activeCall) {
-                    activeCall.status = 'connected';
-                    renderApp();
+        window.sendStickerMessage = async (chatId, isGroup, stickerUrl) => {
+            const currentUser = window.AppState.currentUser;
+            const newMessage = {
+                senderId: currentUser.id,
+                senderName: currentUser.name,
+                chatId: chatId,
+                isGroup: isGroup,
+                type: 'sticker',
+                stickerUrl: stickerUrl,
+                timestamp: Date.now()
+            };
+
+            await addDoc(publicPath('messages'), newMessage);
+            
+            window.AppState.isStickersOpen = false;
+            window.renderApp();
+            window.scrollToBottom();
+        };
+
+        window.handleCreateGroupSubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('group-name-input').value.trim();
+            const description = document.getElementById('group-desc-input').value.trim();
+            const currentUser = window.AppState.currentUser;
+
+            const newGroupId = 'g_' + Math.random().toString(36).substr(2, 7);
+            const newGroup = {
+                id: newGroupId,
+                name,
+                description,
+                adminId: currentUser.id,
+                members: [currentUser.id]
+            };
+
+            await setDoc(publicDoc('groups', newGroupId), newGroup);
+            
+            window.closeCreateGroupModal();
+            window.showNotification('Группа создана!');
+            window.AppState.activeChatId = newGroupId;
+            window.AppState.activeTab = 'chats';
+            window.renderApp();
+        };
+
+        window.joinGroup = async (groupId) => {
+            const group = window.AppState.groups.find(g => g.id === groupId);
+            if (!group) return;
+            const currentUser = window.AppState.currentUser;
+
+            if (!group.members.includes(currentUser.id)) {
+                const updatedGroup = { ...group };
+                updatedGroup.members.push(currentUser.id);
+                await setDoc(publicDoc('groups', groupId), updatedGroup);
+                window.showNotification('Вы вошли в группу!');
+            }
+            window.AppState.activeChatId = groupId;
+            window.AppState.activeTab = 'chats';
+            window.renderApp();
+        };
+
+        window.handleCreateSticker = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('sticker-name').value.trim();
+            const url = document.getElementById('sticker-url').value.trim();
+
+            const newStickerId = 'st_' + Math.random().toString(36).substr(2, 7);
+            const newSticker = {
+                id: newStickerId,
+                name,
+                url
+            };
+
+            await setDoc(publicDoc('stickers', newStickerId), newSticker);
+            window.showNotification('Стикер успешно создан и доступен всем!');
+            window.renderApp();
+        };
+
+        window.handleProfileUpdate = async (e) => {
+            e.preventDefault();
+            let currentUser = { ...window.AppState.currentUser };
+            currentUser.name = document.getElementById('profile-name').value.trim();
+            currentUser.avatar = document.getElementById('profile-avatar').value.trim();
+            currentUser.bio = document.getElementById('profile-bio').value.trim();
+            currentUser.darkMode = document.getElementById('profile-darkmode').checked;
+
+            await window.DB.updateUser(currentUser);
+            window.showNotification('Профиль успешно обновлен!');
+        };
+
+        window.renderApp = () => {
+            const app = document.getElementById('app');
+            const currentUser = window.AppState.currentUser;
+            const { notificationMessage, activeCall, activeTab, pendingFriendLinkId } = window.AppState;
+
+            // Process auto-link request once logged in
+            if (currentUser && pendingFriendLinkId) {
+                const targetId = pendingFriendLinkId;
+                window.AppState.pendingFriendLinkId = null; 
+                if (targetId !== currentUser.id) {
+                    window.autoSendFriendRequest(targetId);
                 }
-            }, 2500);
-        }
+            }
 
-        function endCall() {
-            activeCall = null;
-            renderApp();
-        }
+            if (!currentUser) {
+                app.innerHTML = window.renderAuthScreen();
+                return;
+            }
 
-        function renderCallModal() {
-            return `
-                <div class="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
-                    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center text-white shadow-2xl">
-                        <div class="w-24 h-24 bg-gradient-to-tr from-brand-500 to-emerald-400 rounded-full mx-auto flex items-center justify-center text-3xl font-bold mb-4 shadow-lg animate-pulse">
-                            <i class="fa-solid ${activeCall.type === 'video' ? 'fa-video' : 'fa-phone'}"></i>
+            if (currentUser.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+
+            app.innerHTML = `
+                ${notificationMessage ? window.renderToast(notificationMessage) : ''}
+                ${activeCall ? window.renderCallModal() : ''}
+                <div class="flex h-full w-full overflow-hidden relative">
+                    <!-- Sidebar Navigation -->
+                    <aside class="w-20 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 z-20 transition-colors">
+                        <div class="flex flex-col h-full">
+                            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                <div class="flex items-center space-x-3 overflow-hidden">
+                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0 overflow-hidden">
+                                        ${currentUser.avatar ? `<img src="${window.escapeHtml(currentUser.avatar)}" class="w-full h-full object-cover">` : currentUser.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div class="hidden md:block truncate">
+                                        <h2 class="font-semibold text-sm truncate">${window.escapeHtml(currentUser.name)}</h2>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">ID: ${currentUser.id}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <button onclick="openPencilMenu()" title="Создать / Добавить друга" class="text-slate-500 hover:text-brand-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <i class="fa-solid fa-pen-to-square text-lg"></i>
+                                    </button>
+                                    <button onclick="handleLogout()" title="Выйти" class="hidden md:flex text-slate-400 hover:text-red-500 transition p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <i class="fa-solid fa-right-from-bracket"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tabs Navigation -->
+                            <nav class="p-3 space-y-1 flex-1 overflow-y-auto hide-scroll">
+                                <button onclick="switchTab('chats')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'chats' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-comments text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Чаты</span>
+                                </button>
+                                <button onclick="switchTab('groups')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'groups' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-users text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Группы / Каналы</span>
+                                </button>
+                                <button onclick="switchTab('stickers')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'stickers' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-face-smile text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Стикеры</span>
+                                </button>
+                                <button onclick="switchTab('search')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'search' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-link text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Поиск и ссылка</span>
+                                </button>
+                                <button onclick="switchTab('requests')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition relative ${activeTab === 'requests' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-bell text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Заявки в друзья</span>
+                                    ${(currentUser.friendRequests && currentUser.friendRequests.length > 0) ? `
+                                        <span class="absolute right-3 top-3 md:static bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">${currentUser.friendRequests.length}</span>
+                                    ` : ''}
+                                </button>
+                                <button onclick="switchTab('profile')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+                                    <i class="fa-solid fa-user-gear text-lg w-6 text-center"></i>
+                                    <span class="hidden md:inline">Настройки</span>
+                                </button>
+                            </nav>
                         </div>
-                        <h3 class="font-bold text-lg mb-1">${escapeHtml(activeCall.peerName)}</h3>
-                        <p class="text-xs text-slate-400 mb-8">${activeCall.status === 'calling' ? 'Вызов...' : 'Разговор идет (Симуляция)'}</p>
-                        
-                        <div class="flex justify-center space-x-4">
-                            <button onclick="endCall()" class="w-14 h-14 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-xl shadow-lg transition">
-                                <i class="fa-solid fa-phone-slash"></i>
+                        <div class="p-3 border-t border-slate-200 dark:border-slate-800 md:hidden flex justify-center">
+                            <button onclick="handleLogout()" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl">
+                                <i class="fa-solid fa-right-from-bracket text-lg"></i>
                             </button>
+                        </div>
+                    </aside>
+
+                    <!-- Main Content Workspace -->
+                    <main class="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
+                        ${window.renderMainContent(currentUser)}
+                    </main>
+                </div>
+
+                <!-- Pencil Action Modal -->
+                <div id="pencil-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-bold text-lg">Быстрые действия</h3>
+                            <button onclick="closePencilMenu()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <h4 class="font-semibold text-sm mb-1"><i class="fa-solid fa-user-plus text-brand-500 mr-2"></i>Добавить друга по ID</h4>
+                                <div class="flex gap-2">
+                                    <input type="text" id="pencil-friend-id" placeholder="0000000001" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:border-brand-500">
+                                    <button onclick="submitFriendByIdFromPencil()" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg hover:bg-brand-600 transition">Добавить</button>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 pt-2">
+                                <button onclick="closePencilMenu(); openCreateGroupModal();" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold text-xs rounded-xl flex justify-center space-x-2 transition">
+                                    <i class="fa-solid fa-users-rectangle text-brand-500"></i>
+                                    <span>Создать группу</span>
+                                </button>
+                                <button onclick="closePencilMenu(); switchTab('stickers');" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold text-xs rounded-xl flex justify-center space-x-2 transition">
+                                    <i class="fa-solid fa-face-smile text-brand-500"></i>
+                                    <span>Создать стикер</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
-        }
+        };
 
-        function switchTab(tab) {
-            activeTab = tab;
-            if (tab !== 'chats') activeChatId = null;
-            isStickersOpen = false;
-            renderApp();
-        }
+        window.renderAuthScreen = () => {
+            const mode = window.AppState.authMode;
+            return `
+                <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-950 dark:to-slate-900 p-4">
+                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
+                        <div class="text-center mb-8">
+                            <div class="w-16 h-16 bg-brand-500 rounded-2xl mx-auto flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-brand-500/30 mb-4">
+                                <i class="fa-solid fa-bolt"></i>
+                            </div>
+                            <h1 class="text-2xl font-bold tracking-tight">Xena Messenger</h1>
+                            <p class="text-xs text-slate-500 mt-1">Глобальная синхронизация аккаунтов</p>
+                        </div>
+                        <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
+                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${mode === 'login' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500'}">Вход</button>
+                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-medium rounded-lg transition ${mode === 'register' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500'}">Регистрация</button>
+                        </div>
+                        <form class="space-y-4" onsubmit="handleAuthSubmit(event)">
+                            ${mode === 'register' ? `
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Имя пользователя</label>
+                                    <input type="text" id="auth-name" required placeholder="Иван" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                                </div>
+                            ` : ''}
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email или ID</label>
+                                <input type="text" id="auth-email" required placeholder="0000000001" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Пароль</label>
+                                <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition mt-2">
+                                ${mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        };
 
-        function getConversationMessages(userId, chatId, isGroup) {
-            const messages = DB.getMessages();
+        window.renderMainContent = (currentUser) => {
+            const { activeTab } = window.AppState;
+            if (activeTab === 'search') return window.renderLinkSearchTab(currentUser);
+            if (activeTab === 'requests') return window.renderRequestsTab(currentUser);
+            if (activeTab === 'groups') return window.renderGroupsTab(currentUser);
+            if (activeTab === 'stickers') return window.renderStickersTab();
+            if (activeTab === 'profile') return window.renderProfileTab(currentUser);
+            return window.renderChatsTab(currentUser);
+        };
+
+        window.renderLinkSearchTab = (currentUser) => {
+            const link = `${window.location.origin}${window.location.pathname}?add=${currentUser.id}`;
+            return `
+                <div class="flex flex-col h-full overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-800">
+                        <h2 class="font-bold text-xl mb-2">Найти друга и поделиться ссылкой</h2>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div class="max-w-xl mx-auto bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h3 class="font-bold text-sm mb-2">Найти по ID</h3>
+                            <div class="flex gap-2">
+                                <input type="text" id="link-input" value="${window.escapeHtml(window.AppState.linkQuery)}" oninput="handleLinkInput(event)" placeholder="0000000002" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:border-brand-500 text-sm">
+                                <button onclick="submitFriendByLink()" class="px-6 py-3 bg-brand-500 text-white font-semibold text-sm rounded-xl">Найти и добавить</button>
+                            </div>
+                        </div>
+                        <div class="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm text-center">
+                            <div class="text-2xl font-mono font-bold text-brand-600 bg-brand-50 dark:bg-brand-900/20 py-3 rounded-xl select-all mb-4">
+                                ${currentUser.id}
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                                <input type="text" readonly value="${link}" class="w-full bg-transparent text-xs px-2 focus:outline-none select-all text-slate-500">
+                                <button onclick="copyMyFriendLink('${link}')" class="px-4 py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg shrink-0">Копировать</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.renderChatsTab = (currentUser) => {
+            const { activeChatId, groups, users } = window.AppState;
+            const myGroups = groups.filter(g => g.members && g.members.includes(currentUser.id));
+            const friendsIds = currentUser.friends || [];
+
+            return `
+                <div class="flex h-full w-full overflow-hidden">
+                    <div class="${activeChatId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                        <div class="p-4 border-b border-slate-200 dark:border-slate-800">
+                            <h2 class="font-bold text-lg">Чаты</h2>
+                        </div>
+                        <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 hide-scroll">
+                            ${myGroups.map(g => {
+                                const isSel = activeChatId === g.id;
+                                return `
+                                    <div onclick="openChat('${g.id}', true)" class="flex items-center space-x-3 p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSel ? 'bg-slate-100 dark:bg-slate-800' : ''}">
+                                        <div class="w-12 h-12 rounded-2xl bg-purple-500 flex items-center justify-center text-white shrink-0"><i class="fa-solid fa-users"></i></div>
+                                        <div class="flex-1 truncate"><h3 class="font-semibold text-sm truncate">${window.escapeHtml(g.name)}</h3><p class="text-xs text-slate-500">Группа</p></div>
+                                    </div>`;
+                            }).join('')}
+                            ${friendsIds.map(fId => {
+                                const friend = users.find(u => u.id === fId);
+                                if (!friend) return '';
+                                const isSel = activeChatId === friend.id;
+                                return `
+                                    <div onclick="openChat('${friend.id}', false)" class="flex items-center space-x-3 p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isSel ? 'bg-slate-100 dark:bg-slate-800' : ''}">
+                                        <div class="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center text-white overflow-hidden shrink-0">
+                                            ${friend.avatar ? `<img src="${window.escapeHtml(friend.avatar)}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div class="flex-1 truncate"><h3 class="font-semibold text-sm truncate">${window.escapeHtml(friend.name)}</h3></div>
+                                    </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="${!activeChatId ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+                        ${activeChatId ? window.renderActiveChatWindow(currentUser, activeChatId) : `
+                            <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
+                                <i class="fa-solid fa-comments text-4xl mb-4"></i><p>Выберите диалог слева</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        };
+
+        // Extra modal functions attached globally
+        window.openPencilMenu = () => { document.getElementById('pencil-modal')?.classList.remove('hidden'); };
+        window.closePencilMenu = () => { document.getElementById('pencil-modal')?.classList.add('hidden'); };
+        window.openCreateGroupModal = () => { document.getElementById('create-group-modal')?.classList.remove('hidden'); };
+        window.closeCreateGroupModal = () => { document.getElementById('create-group-modal')?.classList.add('hidden'); };
+        window.copyMyFriendLink = (link) => { navigator.clipboard.writeText(link); window.showNotification('Скопировано!'); };
+        window.openChat = (chatId) => { window.AppState.activeChatId = chatId; window.AppState.isStickersOpen = false; window.renderApp(); window.scrollToBottom(); };
+        window.closeActiveChat = () => { window.AppState.activeChatId = null; window.AppState.isStickersOpen = false; window.renderApp(); };
+        window.toggleStickersPicker = () => { window.AppState.isStickersOpen = !window.AppState.isStickersOpen; window.renderApp(); };
+        
+        window.renderActiveChatWindow = (currentUser, chatId) => {
+            const isGroup = chatId.startsWith('g_');
+            let chatName = '';
+            let chatAvatar = '<i class="fa-solid fa-users"></i>';
             if (isGroup) {
-                return messages.filter(m => m.chatId === chatId).sort((a,b) => a.timestamp - b.timestamp);
+                const group = window.AppState.groups.find(g => g.id === chatId);
+                if (group) chatName = group.name;
             } else {
-                return messages.filter(m => !m.isGroup && 
-                    ((m.senderId === userId && m.chatId === chatId) || (m.senderId === chatId && m.chatId === userId))
-                ).sort((a,b) => a.timestamp - b.timestamp);
+                const friend = window.AppState.users.find(u => u.id === chatId);
+                if (friend) {
+                    chatName = friend.name;
+                    chatAvatar = friend.avatar ? `<img src="${window.escapeHtml(friend.avatar)}" class="w-full h-full object-cover">` : friend.name.charAt(0).toUpperCase();
+                }
             }
-        }
 
-        function getLastDirectMessage(userId, friendId) {
-            const msgs = DB.getMessages().filter(m => !m.isGroup && 
-                ((m.senderId === userId && m.chatId === friendId) || (m.senderId === friendId && m.chatId === userId))
-            );
-            return msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        }
+            const messages = window.AppState.messages.filter(m => {
+                if (isGroup) return m.chatId === chatId;
+                return !m.isGroup && ((m.senderId === currentUser.id && m.chatId === chatId) || (m.senderId === chatId && m.chatId === currentUser.id));
+            }).sort((a,b) => a.timestamp - b.timestamp);
 
-        function getLastGroupMessage(groupId) {
-            const msgs = DB.getMessages().filter(m => m.isGroup && m.chatId === groupId);
-            return msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        }
+            return `
+                <div class="flex flex-col h-full bg-white dark:bg-slate-900 relative">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center space-x-3">
+                        <button onclick="closeActiveChat()" class="md:hidden text-slate-500"><i class="fa-solid fa-arrow-left text-lg"></i></button>
+                        <div class="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold overflow-hidden">${chatAvatar}</div>
+                        <div><h3 class="font-semibold text-sm">${window.escapeHtml(chatName)}</h3></div>
+                    </div>
+                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-slate-950/50">
+                        ${messages.map(msg => {
+                            const isMe = msg.senderId === currentUser.id;
+                            return `
+                                <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+                                    <div class="max-w-xs rounded-2xl px-4 py-2 ${isMe ? 'bg-brand-500 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-none'}">
+                                        ${isGroup && !isMe ? `<div class="text-[10px] font-bold text-brand-300 mb-1">${window.escapeHtml(msg.senderName)}</div>` : ''}
+                                        ${msg.type === 'sticker' ? `<img src="${window.escapeHtml(msg.stickerUrl)}" class="w-32 h-32 object-cover rounded-xl my-1 shadow">` : `<p class="text-sm break-words">${window.escapeHtml(msg.text)}</p>`}
+                                        <div class="text-[10px] mt-1 text-right opacity-70">${window.formatTime(msg.timestamp)}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    ${window.AppState.isStickersOpen ? `
+                        <div class="absolute bottom-20 left-4 md:left-auto md:right-4 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-2xl z-30 max-h-60 overflow-y-auto grid grid-cols-3 gap-2">
+                            ${window.AppState.stickers.map(st => `
+                                <button onclick="sendStickerMessage('${chatId}', ${isGroup}, '${window.escapeHtml(st.url)}')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl flex flex-col items-center">
+                                    <img src="${window.escapeHtml(st.url)}" class="w-12 h-12 object-cover rounded-lg">
+                                </button>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    <form onsubmit="handleSendMessage(event, '${chatId}', ${isGroup})" class="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center space-x-2">
+                        <button type="button" onclick="toggleStickersPicker()" class="p-3 text-slate-500 hover:text-brand-500"><i class="fa-solid fa-face-smile text-xl"></i></button>
+                        <input type="text" id="chat-input" placeholder="Сообщение..." autocomplete="off" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:border-brand-500 text-sm">
+                        <button type="submit" class="w-12 h-12 bg-brand-500 text-white rounded-xl flex items-center justify-center"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+                    </form>
+                </div>
+            `;
+        };
 
-        function scrollToBottom() {
-            setTimeout(() => {
-                const container = document.getElementById('messages-container');
-                if (container) container.scrollTop = container.scrollHeight;
-            }, 50);
-        }
+        // Render remaining tabs similarly (Requests, Groups, Profile, Stickers)
+        window.renderRequestsTab = (currentUser) => {
+            const reqs = currentUser.friendRequests || [];
+            return `
+                <div class="p-6 h-full overflow-y-auto"><h2 class="font-bold text-xl mb-6">Заявки в друзья</h2>
+                    <div class="space-y-4 max-w-2xl mx-auto">
+                        ${reqs.map(id => {
+                            const sender = window.AppState.users.find(u => u.id === id);
+                            if(!sender) return '';
+                            return `
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center text-white overflow-hidden shrink-0">
+                                        ${sender.avatar ? `<img src="${window.escapeHtml(sender.avatar)}" class="w-full h-full object-cover">` : sender.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div><h3 class="font-semibold text-sm">${window.escapeHtml(sender.name)}</h3><p class="text-xs text-slate-500">ID: ${sender.id}</p></div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="acceptFriendRequest('${sender.id}')" class="px-4 py-2 bg-brand-500 text-white text-xs rounded-xl hover:bg-brand-600 transition">Принять</button>
+                                    <button onclick="rejectFriendRequest('${sender.id}')" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs rounded-xl">Отклонить</button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        };
 
-        function formatTime(timestamp) {
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
+        window.renderGroupsTab = (currentUser) => {
+            return `
+                <div class="p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="font-bold text-xl">Группы и Каналы</h2>
+                        <button onclick="openCreateGroupModal()" class="px-4 py-2.5 bg-brand-500 text-white text-xs rounded-xl shadow-md"><i class="fa-solid fa-plus mr-1.5"></i>Создать</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto hide-scroll pb-10">
+                        ${window.AppState.groups.map(g => {
+                            const isMember = g.members.includes(currentUser.id);
+                            return `
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                                <div><h3 class="font-semibold text-sm mb-1">${window.escapeHtml(g.name)}</h3><p class="text-xs text-slate-500 mb-4">${g.members.length} участников</p></div>
+                                <div class="flex justify-end">
+                                    ${isMember 
+                                        ? `<button onclick="openChat('${g.id}', true)" class="px-4 py-2 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs rounded-xl">Открыть чат</button>`
+                                        : `<button onclick="joinGroup('${g.id}')" class="px-4 py-2 bg-brand-500 text-white text-xs rounded-xl">Войти</button>`}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <div id="create-group-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6">
+                        <h3 class="font-bold text-lg mb-4">Создать новую группу</h3>
+                        <form onsubmit="handleCreateGroupSubmit(event)" class="space-y-4">
+                            <input type="text" id="group-name-input" required placeholder="Название" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                            <input type="text" id="group-desc-input" placeholder="Описание" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                            <div class="flex justify-end space-x-2 pt-2">
+                                <button type="button" onclick="closeCreateGroupModal()" class="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">Отмена</button>
+                                <button type="submit" class="px-4 py-2.5 bg-brand-500 text-white text-xs rounded-xl">Создать</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        };
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-        }
+        window.renderStickersTab = () => {
+            return `
+                <div class="p-6 h-full overflow-y-auto">
+                    <h2 class="font-bold text-xl mb-6">Стикеры (Доступны всем)</h2>
+                    <form onsubmit="handleCreateSticker(event)" class="max-w-xl mb-8 space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                        <input type="text" id="sticker-name" required placeholder="Название" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                        <input type="url" id="sticker-url" required placeholder="URL картинки" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                        <button type="submit" class="w-full py-3 bg-brand-500 text-white font-semibold rounded-xl text-sm">Добавить глобально</button>
+                    </form>
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                        ${window.AppState.stickers.map(st => `
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center shadow-sm">
+                                <img src="${window.escapeHtml(st.url)}" class="w-16 h-16 object-cover rounded-xl mb-2">
+                                <span class="text-[10px] truncate w-full text-center">${window.escapeHtml(st.name)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        };
 
-        function renderToast(notification) {
+        window.renderProfileTab = (currentUser) => {
+            return `
+                <div class="p-6 h-full overflow-y-auto">
+                    <h2 class="font-bold text-xl mb-6">Профиль</h2>
+                    <form onsubmit="handleProfileUpdate(event)" class="max-w-xl space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div class="w-16 h-16 rounded-2xl bg-brand-500 flex items-center justify-center text-white text-2xl font-bold overflow-hidden shadow">
+                                ${currentUser.avatar ? `<img src="${window.escapeHtml(currentUser.avatar)}" class="w-full h-full object-cover">` : currentUser.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-base">${window.escapeHtml(currentUser.name)}</h3>
+                                <p class="text-xs text-slate-500 font-mono">Ваш ID: <span class="font-bold text-brand-600">${currentUser.id}</span></p>
+                            </div>
+                        </div>
+                        <input type="text" id="profile-name" value="${window.escapeHtml(currentUser.name)}" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                        <input type="text" id="profile-avatar" value="${window.escapeHtml(currentUser.avatar || '')}" placeholder="URL аватара" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm focus:border-brand-500">
+                        <div class="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-800">
+                            <div><h4 class="font-semibold text-sm">Темная тема</h4></div>
+                            <input type="checkbox" id="profile-darkmode" ${currentUser.darkMode ? 'checked' : ''} class="w-5 h-5 accent-brand-500 cursor-pointer">
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-brand-500 text-white font-semibold rounded-xl text-sm">Сохранить</button>
+                    </form>
+                </div>
+            `;
+        };
+
+        window.renderToast = (notification) => {
             return `
                 <div class="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center space-x-3 border border-slate-800">
                     <i class="fa-solid fa-circle-check text-brand-500 text-xl"></i>
-                    <span class="text-sm font-medium">${escapeHtml(notification.text)}</span>
+                    <span class="text-sm font-medium">${window.escapeHtml(notification.text)}</span>
                 </div>
             `;
-        }
-
-        window.onload = function() {
-            renderApp();
         };
+
+        window.renderCallModal = () => ''; // Removed simulation modal to simplify code
     </script>
 </body>
 </html>
