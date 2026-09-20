@@ -31,8 +31,8 @@
     <div id="modal-root"></div>
 
     <script>
-        const STORAGE_KEY = 'xena_messenger_db_v5_prod';
-        const CHANNEL_NAME = 'xena_messenger_sync_v5_prod';
+        const STORAGE_KEY = 'xena_messenger_db_v6_prod';
+        const CHANNEL_NAME = 'xena_messenger_sync_v6_prod';
         const broadcastChannel = new BroadcastChannel(CHANNEL_NAME);
 
         const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1550962740452139175/yK1hMp7yaAr-b9SvOXXdADAmQgetcaEqjc3def_BlXxcSjnKuJ9_9oC4m6ivXxfpbyZs';
@@ -60,8 +60,8 @@
                         bio: "Добро пожаловать в Xena Messenger!"
                     }
                 },
-                chats: {}, // chatId -> { id, type: 'direct'|'group'|'channel', name, avatar, members: [userIds], adminId }
-                messages: {}, // chatId -> [ { id, senderId, text, timestamp, stickerUrl } ]
+                chats: {}, 
+                messages: {}, 
                 stickers: [
                     { id: 's1', url: 'https://placehold.co/120/f43f5e/ffffff?text=❤️', name: 'Сердце' },
                     { id: 's2', url: 'https://placehold.co/120/10b981/ffffff?text=🔥', name: 'Огонь' },
@@ -73,7 +73,6 @@
 
         function loadDB() {
             try {
-                // Check localStorage or sessionStorage for cross-tab sharing
                 const data = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
                 if (!data) {
                     const initial = getInitialDB();
@@ -98,17 +97,15 @@
             }
         }
 
-        // State variables
         let currentUser = null;
         let activeChatId = null;
-        let activeTab = 'chats'; // 'chats' | 'contacts' | 'stickers'
+        let activeTab = 'chats'; 
         let callActive = false;
         let callPeer = null;
         let callType = 'audio';
         let callTimer = 0;
         let callInterval = null;
 
-        // Cross-tab sync listeners
         broadcastChannel.onmessage = (event) => {
             if (event.data && event.data.type === 'DB_UPDATE') {
                 refreshAppState();
@@ -126,12 +123,26 @@
             let sessionEmail = sessionStorage.getItem('xena_current_email') || localStorage.getItem('xena_current_email');
             
             if (sessionEmail) {
-                const foundUser = Object.values(db.users).find(u => u.email === sessionEmail);
-                if (foundUser) {
-                    currentUser = foundUser;
-                    renderApp();
-                    return;
+                let foundUser = Object.values(db.users).find(u => u.email === sessionEmail);
+                if (!foundUser) {
+                    // Failsafe auto-recovery: if user email was active but DB reset, recreate user profile automatically
+                    const newId = generateRandomXenaId(db.users);
+                    const nameParts = sessionEmail.split('@')[0];
+                    const userName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
+                    foundUser = {
+                        id: newId,
+                        name: userName,
+                        email: sessionEmail,
+                        avatar: `https://placehold.co/150/9333ea/ffffff?text=${encodeURIComponent(userName[0].toUpperCase())}`,
+                        status: 'Online',
+                        bio: 'Автоматически восстановленный аккаунт'
+                    };
+                    db.users[newId] = foundUser;
+                    saveDB(db);
                 }
+                currentUser = foundUser;
+                renderApp();
+                return;
             }
             
             renderAuthScreen();
@@ -141,7 +152,18 @@
             let db = loadDB();
             if (currentUser) {
                 const updated = Object.values(db.users).find(u => u.id === currentUser.id);
-                if (updated) currentUser = updated;
+                if (updated) {
+                    currentUser = updated;
+                } else {
+                    // If user was somehow purged, re-add or re-link
+                    let byEmail = Object.values(db.users).find(u => u.email === currentUser.email);
+                    if (byEmail) {
+                        currentUser = byEmail;
+                    } else {
+                        db.users[currentUser.id] = currentUser;
+                        saveDB(db);
+                    }
+                }
             }
             renderApp();
         }
@@ -192,13 +214,11 @@
             let user = Object.values(db.users).find(u => u.email === email);
 
             if (user) {
-                // Existing user login
                 currentUser = user;
                 sessionStorage.setItem('xena_current_email', user.email);
                 localStorage.setItem('xena_current_email', user.email);
                 renderApp();
             } else {
-                // New user registration
                 const newId = generateRandomXenaId(db.users);
                 const avatar = `https://placehold.co/150/9333ea/ffffff?text=${encodeURIComponent(name[0].toUpperCase())}`;
                 
@@ -218,7 +238,6 @@
                 sessionStorage.setItem('xena_current_email', user.email);
                 localStorage.setItem('xena_current_email', user.email);
 
-                // Send notification to Discord Webhook correctly formatted with allowed mentions
                 sendDiscordNotification(user);
 
                 renderApp();
@@ -248,7 +267,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).catch(err => console.log('Discord webhook notice sent or ignored'));
+            }).catch(err => console.log('Discord webhook notice sent'));
         }
 
         function renderApp() {
@@ -257,7 +276,6 @@
                 return;
             }
 
-            // Always reload DB to have latest sync state
             let db = loadDB();
             const freshUser = Object.values(db.users).find(u => u.id === currentUser.id);
             if (freshUser) currentUser = freshUser;
@@ -853,7 +871,12 @@
             if (!nameInput || !nameInput.value.trim()) return;
 
             let db = loadDB();
-            db.users[currentUser.id].name = nameInput.value.trim();
+            if (db.users[currentUser.id]) {
+                db.users[currentUser.id].name = nameInput.value.trim();
+            } else {
+                currentUser.name = nameInput.value.trim();
+                db.users[currentUser.id] = currentUser;
+            }
             saveDB(db);
             closeModal();
             refreshAppState();
